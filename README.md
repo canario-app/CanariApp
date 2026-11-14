@@ -1,4 +1,4 @@
-# Canarios-app
+# CanariApp
 
 **Estado del proyecto:** etapa inicial de organización y definición de requisitos. Las funciones descritas son objetivos del proyecto; **todavía no están implementadas**.
 
