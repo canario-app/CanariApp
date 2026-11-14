@@ -26,7 +26,7 @@ class BreederController {
     }
 
     /**
-     * [Criador] Actualiza el número de socio del perfil propio.
+     * [Criador] Actualiza únicamente la contraseña del perfil propio.
      */
     public function updateProfile(): void {
         $userId = AuthMiddleware::userId();
@@ -38,25 +38,40 @@ class BreederController {
         }
 
         $input = $this->getJsonInput();
-        $memberNumber = $this->validateMemberNumber($input['numero_socio'] ?? null);
 
-        $breederModel->update($profile['id_criador'], [
-            'numero_socio' => $memberNumber,
-        ]);
+        if (array_key_exists('numero_socio', $input)) {
+            ResponseHelper::badRequest('El número de socio se asigna automáticamente y no puede ser modificado.');
+        }
 
-        $updated = $breederModel->findWithUser($profile['id_criador']);
-        ResponseHelper::success($updated, 'Perfil actualizado correctamente.');
+        if (!array_key_exists('password', $input) || !is_string($input['password'])) {
+            ResponseHelper::validationError([
+                'password' => 'Debe enviar la nueva contraseña.',
+            ]);
+        }
+
+        $password = trim($input['password']);
+        if (mb_strlen($password) < 8) {
+            ResponseHelper::validationError([
+                'password' => 'La contraseña debe tener al menos 8 caracteres.',
+            ]);
+        }
+
+        $userModel = new User();
+        $userModel->updatePassword((int) $userId, $password);
+
+        $updated = $breederModel->findByUserId($userId);
+        ResponseHelper::success($updated, 'Contraseña actualizada correctamente.');
     }
 
     /**
-     * [Admin] Lista todos los criadores o filtra por nombre si se envía ?nombre=...
+     * [Admin] Lista todos los criadores o filtra por nombre, número de socio o correo (?buscar=...).
      */
     public function index(): void {
         $breederModel = new Breeder();
-        $name = trim((string) ($_GET['nombre'] ?? ''));
+        $search = trim((string) ($_GET['buscar'] ?? ''));
 
-        $breeders = $name !== ''
-            ? $breederModel->searchByName($name)
+        $breeders = $search !== ''
+            ? $breederModel->search($search)
             : $breederModel->findAllWithUser();
 
         ResponseHelper::success($breeders, 'Listado de criadores obtenido.');
@@ -66,8 +81,14 @@ class BreederController {
      * [Admin] Muestra el detalle de un criador específico.
      */
     public function show(int|string $id): void {
+        $breederId = (int) $id;
+
+        if ($breederId <= 0) {
+            ResponseHelper::badRequest('El ID del criador no es válido.');
+        }
+
         $breederModel = new Breeder();
-        $breeder = $breederModel->findWithUser((int) $id);
+        $breeder = $breederModel->findWithUser($breederId);
 
         if ($breeder === null) {
             ResponseHelper::notFound('Criador no encontrado.');
@@ -77,36 +98,42 @@ class BreederController {
     }
 
     /**
-     * [Admin] Vincula manualmente un usuario existente como criador.
+     * [Admin] Crea automáticamente la cuenta de usuario y el perfil de criador con número de socio autogenerado.
      */
     public function store(): void {
         $input = $this->getJsonInput();
-        $userId = $input['id_usuario'] ?? null;
 
-        if (!is_numeric($userId) || (int) $userId <= 0) {
-            ResponseHelper::badRequest('El campo id_usuario es obligatorio y debe ser un entero válido.');
+        $name = is_string($input['nombre'] ?? null) ? trim($input['nombre']) : '';
+        $email = is_string($input['correo'] ?? null) ? trim($input['correo']) : '';
+        $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
+
+        $errors = [];
+        if ($name === '') {
+            $errors['nombre'] = 'El nombre es obligatorio.';
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors['correo'] = 'El correo electrónico no es válido.';
+        }
+        if ($password === '' || mb_strlen($password) < 8) {
+            $errors['password'] = 'La contraseña es obligatoria y debe tener al menos 8 caracteres.';
         }
 
-        $userId = (int) $userId;
-        $memberNumber = $this->validateMemberNumber($input['numero_socio'] ?? null);
-
-        $userModel = new User();
-        if ($userModel->find($userId) === null) {
-            ResponseHelper::notFound('El usuario indicado no existe.');
+        if (!empty($errors)) {
+            ResponseHelper::validationError($errors);
         }
 
         $breederModel = new Breeder();
-        if ($breederModel->findByUserId($userId) !== null) {
-            ResponseHelper::conflict('Este usuario ya tiene un perfil de criador asignado.');
-        }
-
-        $newId = $breederModel->create([
-            'id_usuario'   => $userId,
-            'numero_socio' => $memberNumber,
+        $result = $breederModel->create([
+            'nombre'   => $name,
+            'correo'   => $email,
+            'password' => $password,
         ]);
 
-        $created = $breederModel->findWithUser($newId);
-        ResponseHelper::created($created, 'Criador creado exitosamente.');
+        if ($result === 'conflict_email') {
+            ResponseHelper::conflict('El correo electrónico ya está registrado.');
+        }
+
+        ResponseHelper::created($result, 'Criador creado exitosamente.');
     }
 
     /**
@@ -129,18 +156,20 @@ class BreederController {
         $input = $this->getJsonInput();
 
         $name = array_key_exists('nombre', $input)
-            ? trim((string) $input['nombre'])
+            ? (is_string($input['nombre']) ? trim($input['nombre']) : '')
             : $existing['nombre'];
 
         $email = array_key_exists('correo', $input)
-            ? trim((string) $input['correo'])
+            ? (is_string($input['correo']) ? trim($input['correo']) : '')
             : $existing['correo'];
 
+        // Si se envía numero_socio, no puede ser null ni vacío; si se omite, conserva el actual
         $memberNumber = array_key_exists('numero_socio', $input)
             ? $this->validateMemberNumber($input['numero_socio'])
             : $existing['numero_socio'];
 
-        $password = isset($input['password']) ? trim((string) $input['password']) : null;
+        $hasPassword = array_key_exists('password', $input) && $input['password'] !== null && $input['password'] !== '';
+        $password = null;
 
         $errors = [];
         if ($name === '') {
@@ -149,8 +178,12 @@ class BreederController {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors['correo'] = 'El correo electrónico no es válido.';
         }
-        if ($password !== null && $password !== '' && strlen($password) < 8) {
-            $errors['password'] = 'La contraseña debe tener al menos 8 caracteres.';
+        if ($hasPassword) {
+            if (!is_string($input['password']) || mb_strlen(trim($input['password'])) < 8) {
+                $errors['password'] = 'La contraseña debe tener al menos 8 caracteres.';
+            } else {
+                $password = trim($input['password']);
+            }
         }
 
         if (!empty($errors)) {
@@ -161,15 +194,19 @@ class BreederController {
             'nombre'       => $name,
             'correo'       => $email,
             'numero_socio' => $memberNumber,
-            'password'     => ($password !== null && $password !== '') ? $password : null,
+            'password'     => $password,
         ]);
 
         if ($result === 'not_found') {
             ResponseHelper::notFound('Criador no encontrado.');
         }
 
-        if ($result === 'conflict') {
-            ResponseHelper::conflict('El correo o el número de socio ya está registrado por otro usuario.');
+        if ($result === 'conflict_email') {
+            ResponseHelper::conflict('El correo electrónico ya está registrado por otro usuario.');
+        }
+
+        if ($result === 'conflict_member_number') {
+            ResponseHelper::conflict('El número de socio ya está registrado por otro criador.');
         }
 
         ResponseHelper::success($result, 'Criador actualizado exitosamente.');
@@ -213,22 +250,20 @@ class BreederController {
     }
 
     /**
-     * Valida y normaliza numero_socio (VARCHAR(5) nullable en PostgreSQL).
+     * Valida y normaliza numero_socio (VARCHAR(5) NOT NULL en PostgreSQL).
      */
-    private function validateMemberNumber(mixed $value): ?string {
-        if ($value === null) {
-            return null;
-        }
-
-        if (!is_string($value) && !is_numeric($value)) {
+    private function validateMemberNumber(mixed $value): string {
+        if ($value === null || (!is_string($value) && !is_numeric($value))) {
             ResponseHelper::validationError([
-                'numero_socio' => 'El número de socio debe ser texto o nulo.',
+                'numero_socio' => 'El número de socio es obligatorio y no puede ser nulo.',
             ]);
         }
 
         $trimmed = trim((string) $value);
         if ($trimmed === '') {
-            return null;
+            ResponseHelper::validationError([
+                'numero_socio' => 'El número de socio no puede estar vacío.',
+            ]);
         }
 
         if (mb_strlen($trimmed) > 5) {
