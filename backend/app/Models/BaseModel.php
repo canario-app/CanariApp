@@ -297,6 +297,81 @@ abstract class BaseModel{
     }
 
     /**
+     * Comprueba si existe al menos una fila que cumpla las condiciones.
+     *
+     * Las condiciones usan la misma semántica que findAllBy(): igualdad por
+     * columna, null genera IS NULL y un arreglo genera IN (...).
+     *
+     * @param array<string, mixed> $conditions
+     */
+    public function existsBy(array $conditions): bool{
+        if ($conditions === []) {
+            throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
+        }
+
+        return $this->count($conditions) > 0;
+    }
+
+    /**
+     * Actualiza todas las filas que cumplan las condiciones.
+     *
+     * Devuelve la cantidad de filas afectadas. En PostgreSQL una fila puede
+     * contar como afectada aunque sus valores no cambien.
+     *
+     * @param array<string, mixed> $conditions
+     * @param array<string, mixed> $data
+     */
+    public function updateBy(array $conditions, array $data): int{
+        if ($conditions === []) {
+            throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
+        }
+
+        if ($data === []) {
+            throw new InvalidArgumentException('No hay datos para actualizar.');
+        }
+
+        [$where, $params] = $this->buildWhere($conditions);
+
+        $assignments = [];
+
+        foreach ($data as $column => $value) {
+            $column = (string) $column;
+            $parameter = 'set_' . $column;
+
+            $assignments[] = $this->quoteIdentifier($column) . ' = :' . $parameter;
+            $params[$parameter] = $value;
+        }
+
+        $sql = sprintf(
+            'UPDATE %s SET %s%s',
+            $this->tableName(),
+            implode(', ', $assignments),
+            $where
+        );
+
+        return $this->execute($sql, $params);
+    }
+
+    /**
+     * Elimina todas las filas que cumplan las condiciones.
+     *
+     * Devuelve la cantidad de filas eliminadas.
+     *
+     * @param array<string, mixed> $conditions
+     */
+    public function deleteBy(array $conditions): int{
+        if ($conditions === []) {
+            throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
+        }
+
+        [$where, $params] = $this->buildWhere($conditions);
+
+        $sql = sprintf('DELETE FROM %s%s', $this->tableName(), $where);
+
+        return $this->execute($sql, $params);
+    }
+
+    /**
      * Ejecuta un callback dentro de una transacción.
      *
      * Si el callback lanza una excepción, se hace rollback y se relanza.
