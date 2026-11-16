@@ -119,22 +119,3 @@ Si se cambia el esquema, hay que actualizar el diagrama para que sigan coincidie
 
 Este archivo se generó por programa y se comprobó que ninguna línea atraviesa una figura ajena, pero no se ha abierto en draw.io. Antes de entregarlo, ábranlo y revisen que el texto se lea bien.
 
-## `Cambios_v7_1.md`
-
-Las notas de la versión. Explica qué se corrigió respecto a la v7, hallazgo por hallazgo de la revisión guardada en `../revision_fable/`, qué cambia para quien programa en PHP y qué sigue pendiente.
-
-Para entender el modelo completo desde cero conviene leer primero `../Cambios_v7.md`, que describe los 21 cambios de la v6 a la v7, y después este.
-
----
-
-## Relación con las otras carpetas
-
-| Carpeta | Contenido |
-|---|---|
-| `Version Antigua/` | v5, solo de referencia |
-| `Version Claude/` | v6 |
-| `Version Fable/` | v7 y sus notas (`Cambios_v7.md`) |
-| `Version Fable/revision_fable/` | Revisión de la v7 hecha por el equipo, con sus evidencias |
-| `Version Fable/v7.1/` | Esta carpeta: la v7 con esa revisión aplicada |
-
-Los datos de demostración de `outputs/bd_demo/` están escritos para la v6 y no cargan en la v7.1 sin adaptarlos.
