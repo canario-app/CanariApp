@@ -8,38 +8,43 @@ use PDOException;
 use RuntimeException;
 
 /**
- * Modelo de la tabla canario.
+ * Modelo de la tabla canario según el esquema v7.1.
  *
- * Nota: el esquema no define UNIQUE sobre anillo, por lo que anilloExists()
- * valida en código (mejor esfuerzo). Si la BD agrega el índice, 23505 se
- * traduce igualmente a 'conflict_anillo'.
+ * El anillo se identifica con cuatro datos (número de anillo, sigla del club,
+ * número de socio y temporada) y es único en todo el sistema. La base compara
+ * el número de anillo y el de socio como enteros: '0005' y '5' son el mismo
+ * anillo (uq_anillo).
+ *
+ * id_canario, id_criador y fecha_registro los asigna la base;
+ * requiere_revision lo calcula el trigger trg_validar_sexo_variedad, así que
+ * el cliente no puede escribirlo.
  */
 class Canary extends BaseModel {
     protected string $table = 'canario';
     protected string $primaryKey = 'id_canario';
 
     /**
-     * Campos que el cliente puede escribir. id_canario, id_criador y
-     * numero_socio se asignan en el servidor.
+     * Campos que el cliente puede escribir. id_criador, fecha_registro y
+     * requiere_revision se asignan en el servidor o en la base de datos.
      *
      * @var array<int, string>
      */
     private const ASSIGNABLE_FIELDS = [
         'anillo',
-        'nombre',
-        'sexo',
-        'fecha_nacimiento',
-        'disponibilidad',
-        'id_color',
-        'id_variedad',
         'id_club',
+        'numero_socio',
         'temporada',
-        'requiere_revision',
+        'sexo',
+        'id_variedad',
     ];
 
+    private const ERROR_INVALID_DATA = 'invalid_data';
+    private const ERROR_CONFLICT_ANILLO = 'conflict_anillo';
+    private const ERROR_INVALID_REFERENCE = 'invalid_reference';
+    private const ERROR_NOT_FOUND = 'not_found';
+
     /**
-     * Busca un canario por su PK junto con los nombres de color, variedad,
-     * club y criador.
+     * Busca un canario por su PK junto con club, variedad y criador.
      *
      * @return array<string, mixed>|null
      */
@@ -54,8 +59,8 @@ class Canary extends BaseModel {
     /**
      * Lista canarios con detalle y filtros opcionales.
      *
-     * Filtros admitidos: buscar (anillo o nombre), disponibilidad,
-     * id_color/color y temporada. Si $idCriador no es null, solo devuelve
+     * Filtros admitidos: buscar (anillo o número de socio), id_club,
+     * id_variedad y temporada. Si $idCriador no es null, solo devuelve
      * los canarios de ese criador.
      *
      * @param array<string, mixed> $filters
@@ -76,30 +81,17 @@ class Canary extends BaseModel {
 
         if ($search !== '') {
             // PDO con prepares nativos no admite repetir el mismo parámetro.
-            $conditions[] = '(c.anillo ILIKE :buscar_anillo OR c.nombre ILIKE :buscar_nombre)';
+            $conditions[] = '(c.anillo ILIKE :buscar_anillo OR c.numero_socio ILIKE :buscar_socio)';
             $params['buscar_anillo'] = '%' . $search . '%';
-            $params['buscar_nombre'] = '%' . $search . '%';
+            $params['buscar_socio'] = '%' . $search . '%';
         }
 
-        $availability = is_scalar($filters['disponibilidad'] ?? null)
-            ? trim((string) $filters['disponibilidad'])
-            : '';
-
-        if ($availability !== '') {
-            $conditions[] = 'c.disponibilidad = :disponibilidad';
-            $params['disponibilidad'] = $availability;
-        }
-
-        $color = $filters['id_color'] ?? $filters['color'] ?? null;
-        if (is_scalar($color) && $color !== '') {
-            $conditions[] = 'c.id_color = :id_color';
-            $params['id_color'] = (int) $color;
-        }
-
-        $season = $filters['temporada'] ?? null;
-        if (is_scalar($season) && $season !== '') {
-            $conditions[] = 'c.temporada = :temporada';
-            $params['temporada'] = (int) $season;
+        foreach (['id_club', 'id_variedad', 'temporada'] as $field) {
+            $value = $filters[$field] ?? null;
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                $conditions[] = 'c.' . $field . ' = :' . $field;
+                $params[$field] = (int) $value;
+            }
         }
 
         $sql = $this->detailedSelect();
@@ -114,7 +106,7 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Busca canarios por coincidencia parcial en anillo o nombre.
+     * Busca canarios por coincidencia parcial en anillo o número de socio.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -123,42 +115,63 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Busca un canario por su anillo, opcionalmente acotado a un criador.
+     * Busca un canario por el anillo completo (las cuatro partes).
      *
      * @return array<string, mixed>|null
      */
-    public function findByAnillo(string $anillo, ?int $idCriador = null): ?array {
-        $sql = $this->detailedSelect() . ' WHERE c.anillo = :anillo';
-        $params = ['anillo' => $anillo];
-
-        if ($idCriador !== null) {
-            $sql .= ' AND c.id_criador = :id_criador';
-            $params['id_criador'] = $idCriador;
+    public function findByAnillo(
+        string $anillo,
+        int $idClub,
+        string $numeroSocio,
+        int $temporada
+    ): ?array {
+        $ring = $this->normalizeRing($anillo, $numeroSocio, $temporada);
+        if ($ring === null) {
+            return null;
         }
 
-        $sql .= ' LIMIT 1';
+        $sql = $this->detailedSelect()
+            . ' WHERE c.anillo::INT = :anillo'
+            . ' AND c.id_club = :id_club'
+            . ' AND c.numero_socio::INT = :numero_socio'
+            . ' AND c.temporada = :temporada'
+            . ' LIMIT 1';
 
-        return $this->fetch($sql, $params);
+        return $this->fetch($sql, [
+            'anillo'       => $ring['anillo'],
+            'id_club'      => $idClub,
+            'numero_socio' => $ring['numero_socio'],
+            'temporada'    => $ring['temporada'],
+        ]);
     }
 
     /**
-     * Indica si el anillo ya está registrado. En edición se excluye el
-     * propio canario con $excludeId; si se indica $idCriador, solo se
-     * compara dentro de ese criador.
+     * Indica si el anillo completo ya existe en cualquier criadero.
+     * En edición se excluye el propio canario con $excludeId.
      */
     public function anilloExists(
         string $anillo,
-        ?int $excludeId = null,
-        ?int $idCriador = null
+        int $idClub,
+        string $numeroSocio,
+        int $temporada,
+        ?int $excludeId = null
     ): bool {
-        $sql = 'SELECT 1 FROM ' . $this->quoteIdentifier($this->table)
-            . ' WHERE anillo = :anillo';
-        $params = ['anillo' => $anillo];
-
-        if ($idCriador !== null) {
-            $sql .= ' AND id_criador = :id_criador';
-            $params['id_criador'] = $idCriador;
+        $ring = $this->normalizeRing($anillo, $numeroSocio, $temporada);
+        if ($ring === null) {
+            return false;
         }
+
+        $sql = 'SELECT 1 FROM ' . $this->quoteIdentifier($this->table)
+            . ' WHERE anillo::INT = :anillo'
+            . ' AND id_club = :id_club'
+            . ' AND numero_socio::INT = :numero_socio'
+            . ' AND temporada = :temporada';
+        $params = [
+            'anillo'       => $ring['anillo'],
+            'id_club'      => $idClub,
+            'numero_socio' => $ring['numero_socio'],
+            'temporada'    => $ring['temporada'],
+        ];
 
         if ($excludeId !== null) {
             $sql .= ' AND id_canario <> :id_canario';
@@ -181,22 +194,33 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Crea un canario asignando el criador y el numero_socio del criador.
+     * Crea un canario para el criador indicado.
+     *
+     * El número de socio se toma del cuerpo de la petición: es parte del
+     * anillo del ejemplar, no se copia del perfil del criador.
      *
      * Devuelve el ID creado o un código de error de dominio.
      */
     public function createForBreeder(array $data, int $idCriador): int|string {
-        $anillo = trim((string) ($data['anillo'] ?? ''));
+        $payload = $this->filterAssignable($data);
+        $validation = $this->validate($payload, true);
+        if ($validation !== null) {
+            return $validation;
+        }
+        $payload = $this->normalizePayload($payload);
 
-        if ($anillo !== '' && $this->anilloExists($anillo, null, $idCriador)) {
-            return 'conflict_anillo';
+        if (
+            $this->anilloExists(
+                $payload['anillo'],
+                $payload['id_club'],
+                $payload['numero_socio'],
+                $payload['temporada']
+            )
+        ) {
+            return self::ERROR_CONFLICT_ANILLO;
         }
 
-        $payload = $this->filterAssignable($data);
         $payload['id_criador'] = $idCriador;
-        $payload['numero_socio'] = $this->findBreederMemberNumber($idCriador);
-        $payload['disponibilidad'] ??= 'disponible';
-        $payload['requiere_revision'] ??= false;
 
         try {
             $id = $this->insert($payload);
@@ -218,20 +242,29 @@ class Canary extends BaseModel {
      * error de dominio.
      */
     public function updateForBreeder(int $id, array $data, int $idCriador): int|string {
-        $anillo = $data['anillo'] ?? null;
-
-        if (
-            is_string($anillo)
-            && trim($anillo) !== ''
-            && $this->anilloExists(trim($anillo), $id, $idCriador)
-        ) {
-            return 'conflict_anillo';
+        $payload = $this->filterAssignable($data);
+        if ($payload === []) {
+            return $this->belongsToBreeder($id, $idCriador) ? 0 : self::ERROR_NOT_FOUND;
         }
 
-        $payload = $this->filterAssignable($data);
+        $validation = $this->validate($payload, false);
+        if ($validation !== null) {
+            return $validation;
+        }
+        $payload = $this->normalizePayload($payload);
 
-        if ($payload === []) {
-            return $this->belongsToBreeder($id, $idCriador) ? 0 : 'not_found';
+        $current = $this->find($id);
+        if ($current === null || (int) $current['id_criador'] !== $idCriador) {
+            return self::ERROR_NOT_FOUND;
+        }
+
+        $anillo = (string) ($payload['anillo'] ?? $current['anillo']);
+        $idClub = (int) ($payload['id_club'] ?? $current['id_club']);
+        $numeroSocio = (string) ($payload['numero_socio'] ?? $current['numero_socio']);
+        $temporada = (int) ($payload['temporada'] ?? $current['temporada']);
+
+        if ($this->anilloExists($anillo, $idClub, $numeroSocio, $temporada, $id)) {
+            return self::ERROR_CONFLICT_ANILLO;
         }
 
         try {
@@ -244,45 +277,26 @@ class Canary extends BaseModel {
         }
 
         if ($affected === 0 && !$this->belongsToBreeder($id, $idCriador)) {
-            return 'not_found';
+            return self::ERROR_NOT_FOUND;
         }
 
         return $affected;
     }
 
     /**
-     * Elimina un canario solo si pertenece al criador indicado.
-     *
-     * Devuelve las filas eliminadas o un código de error de dominio.
-     */
-    public function deleteForBreeder(int $id, int $idCriador): int|string {
-        try {
-            $affected = $this->deleteBy([
-                'id_canario' => $id,
-                'id_criador' => $idCriador,
-            ]);
-        } catch (PDOException $exception) {
-            return $this->mapWriteException($exception, true);
-        }
-
-        return $affected > 0 ? $affected : 'not_found';
-    }
-
-    /**
-     * SELECT base con los nombres relacionados. Se reutiliza en las lecturas.
+     * SELECT base con los datos del canario y los nombres relacionados.
      */
     private function detailedSelect(): string {
-        return 'SELECT c.id_canario, c.anillo, c.nombre, c.sexo, c.fecha_nacimiento,
-                       c.disponibilidad, c.id_color, co.nombre AS color_nombre,
-                       c.numero_socio, c.temporada, c.id_club, cl.sigla AS club_sigla,
-                       c.id_variedad, v.nombre AS variedad_nombre, c.id_criador,
-                       u.nombre AS criador_nombre, c.requiere_revision
-                FROM ' . $this->quoteIdentifier($this->table) . ' c
-                LEFT JOIN color co ON c.id_color = co.id_color
-                LEFT JOIN variedad v ON c.id_variedad = v.id_variedad
-                LEFT JOIN club cl ON c.id_club = cl.id_club
-                INNER JOIN criador cr ON c.id_criador = cr.id_criador
-                INNER JOIN usuario u ON cr.id_usuario = u.id_usuario';
+        return 'SELECT c.id_canario, c.anillo, c.id_club, cl.sigla AS club_sigla,
+                        c.numero_socio, c.temporada, c.sexo, c.id_variedad,
+                        v.nombre AS variedad_nombre, c.id_criador,
+                        u.nombre AS criador_nombre, c.fecha_registro,
+                        c.requiere_revision
+                 FROM ' . $this->quoteIdentifier($this->table) . ' c
+                 INNER JOIN club cl ON c.id_club = cl.id_club
+                 LEFT JOIN variedad v ON c.id_variedad = v.id_variedad
+                 INNER JOIN criador cr ON c.id_criador = cr.id_criador
+                 INNER JOIN usuario u ON cr.id_usuario = u.id_usuario';
     }
 
     /**
@@ -296,25 +310,128 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Obtiene el numero_socio del criador (puede ser null según el esquema).
+     * Valida los campos recibidos. En alta se exigen los cuatro datos del
+     * anillo más sexo y variedad (una cría se registra por otro flujo).
+     *
+     * @param array<string, mixed> $data
      */
-    private function findBreederMemberNumber(int $idCriador): ?string {
-        $value = $this->fetchColumn(
-            'SELECT numero_socio FROM criador WHERE id_criador = :id_criador',
-            ['id_criador' => $idCriador]
-        );
+    private function validate(array $data, bool $isCreate): ?string {
+        if ($isCreate) {
+            foreach (self::ASSIGNABLE_FIELDS as $field) {
+                if (!array_key_exists($field, $data)) {
+                    return self::ERROR_INVALID_DATA;
+                }
+            }
+        }
 
-        return $value === null ? null : (string) $value;
+        if (array_key_exists('anillo', $data)) {
+            $value = $data['anillo'];
+            if (!is_scalar($value) || preg_match('/^[0-9]{1,6}$/', (string) $value) !== 1) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        if (array_key_exists('numero_socio', $data)) {
+            $value = $data['numero_socio'];
+            if (!is_scalar($value) || preg_match('/^[0-9]{1,5}$/', (string) $value) !== 1) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        if (array_key_exists('id_club', $data)) {
+            if ($this->positiveInt($data['id_club']) === null) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        if (array_key_exists('id_variedad', $data)) {
+            if ($this->positiveInt($data['id_variedad']) === null) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        if (array_key_exists('temporada', $data)) {
+            $temporada = $this->positiveInt($data['temporada']);
+            if ($temporada === null || $temporada < 1000 || $temporada > 9999) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        if (array_key_exists('sexo', $data)) {
+            $sexo = $data['sexo'];
+            if (!is_string($sexo) || !in_array($sexo, ['M', 'H'], true)) {
+                return self::ERROR_INVALID_DATA;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Convierte enteros recibidos como JSON o query string a int positivo.
+     */
+    private function positiveInt(mixed $value): ?int {
+        if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/', $value) === 1)) {
+            return null;
+        }
+
+        $integer = (int) $value;
+
+        return $integer > 0 ? $integer : null;
+    }
+
+    /**
+     * Normaliza los tipos de los campos ya validados.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePayload(array $payload): array {
+        if (array_key_exists('anillo', $payload)) {
+            $payload['anillo'] = (string) $payload['anillo'];
+        }
+        if (array_key_exists('numero_socio', $payload)) {
+            $payload['numero_socio'] = (string) $payload['numero_socio'];
+        }
+        foreach (['id_club', 'id_variedad', 'temporada'] as $field) {
+            if (array_key_exists($field, $payload)) {
+                $payload[$field] = (int) $payload[$field];
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Parte numérica del anillo, tal como la compara el índice uq_anillo.
+     *
+     * @return array{anillo: int, numero_socio: int, temporada: int}|null
+     */
+    private function normalizeRing(string $anillo, string $numeroSocio, int $temporada): ?array {
+        if (
+            preg_match('/^[0-9]{1,6}$/', $anillo) !== 1
+            || preg_match('/^[0-9]{1,5}$/', $numeroSocio) !== 1
+            || $temporada < 1000
+            || $temporada > 9999
+        ) {
+            return null;
+        }
+
+        return [
+            'anillo'       => (int) $anillo,
+            'numero_socio' => (int) $numeroSocio,
+            'temporada'    => $temporada,
+        ];
     }
 
     /**
      * Traduce errores de PostgreSQL a códigos de dominio.
      */
-    private function mapWriteException(PDOException $exception, bool $isDelete = false): string {
+    private function mapWriteException(PDOException $exception): string {
         return match ((string) $exception->getCode()) {
-            '23505' => 'conflict_anillo',
-            '23503' => $isDelete ? 'has_history' : 'invalid_reference',
-            '23502', '23514', '22P02', '22007' => 'invalid_reference',
+            '23505' => self::ERROR_CONFLICT_ANILLO,
+            '23503' => self::ERROR_INVALID_REFERENCE,
+            '23502', '23514', '22P02', '22007', 'P0001' => self::ERROR_INVALID_DATA,
             default => throw $exception,
         };
     }
