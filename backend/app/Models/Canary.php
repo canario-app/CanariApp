@@ -326,14 +326,14 @@ class Canary extends BaseModel {
 
         if (array_key_exists('anillo', $data)) {
             $value = $data['anillo'];
-            if (!is_scalar($value) || preg_match('/^[0-9]{1,6}$/', (string) $value) !== 1) {
+            if (!is_scalar($value) || preg_match('/^[0-9]{1,6}$/', trim((string) $value)) !== 1) {
                 return self::ERROR_INVALID_DATA;
             }
         }
 
         if (array_key_exists('numero_socio', $data)) {
             $value = $data['numero_socio'];
-            if (!is_scalar($value) || preg_match('/^[0-9]{1,5}$/', (string) $value) !== 1) {
+            if (!is_scalar($value) || preg_match('/^[0-9]{1,5}$/', trim((string) $value)) !== 1) {
                 return self::ERROR_INVALID_DATA;
             }
         }
@@ -371,6 +371,9 @@ class Canary extends BaseModel {
      * Convierte enteros recibidos como JSON o query string a int positivo.
      */
     private function positiveInt(mixed $value): ?int {
+        if (is_string($value)) {
+            $value = trim($value);
+        }
         if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/', $value) === 1)) {
             return null;
         }
@@ -388,10 +391,10 @@ class Canary extends BaseModel {
      */
     private function normalizePayload(array $payload): array {
         if (array_key_exists('anillo', $payload)) {
-            $payload['anillo'] = (string) $payload['anillo'];
+            $payload['anillo'] = trim((string) $payload['anillo']);
         }
         if (array_key_exists('numero_socio', $payload)) {
-            $payload['numero_socio'] = (string) $payload['numero_socio'];
+            $payload['numero_socio'] = trim((string) $payload['numero_socio']);
         }
         foreach (['id_club', 'id_variedad', 'temporada'] as $field) {
             if (array_key_exists($field, $payload)) {
