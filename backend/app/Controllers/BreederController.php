@@ -98,7 +98,7 @@ class BreederController {
     }
 
     /**
-     * [Admin] Crea automáticamente la cuenta de usuario y el perfil de criador con número de socio autogenerado.
+     * [Admin] Crea la cuenta de usuario y el perfil de criador.
      */
     public function store(): void {
         $input = $this->getJsonInput();
@@ -106,31 +106,49 @@ class BreederController {
         $name = is_string($input['nombre'] ?? null) ? trim($input['nombre']) : '';
         $email = is_string($input['correo'] ?? null) ? trim($input['correo']) : '';
         $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
+        $rawMemberNumber = $input['numero_socio'] ?? null;
 
         $errors = [];
-        if ($name === '') {
-            $errors['nombre'] = 'El nombre es obligatorio.';
+
+        $nameError = $this->getNameError($name);
+        if ($nameError !== null) {
+            $errors['nombre'] = $nameError;
         }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors['correo'] = 'El correo electrónico no es válido.';
+
+        $emailError = $this->getEmailError($email);
+        if ($emailError !== null) {
+            $errors['correo'] = $emailError;
         }
+
         if ($password === '' || mb_strlen($password) < 8) {
             $errors['password'] = 'La contraseña es obligatoria y debe tener al menos 8 caracteres.';
+        }
+
+        $memberNumberError = $this->getMemberNumberError($rawMemberNumber);
+        if ($memberNumberError !== null) {
+            $errors['numero_socio'] = $memberNumberError;
         }
 
         if (!empty($errors)) {
             ResponseHelper::validationError($errors);
         }
 
+        $memberNumber = trim((string) $rawMemberNumber);
+
         $breederModel = new Breeder();
         $result = $breederModel->create([
-            'nombre'   => $name,
-            'correo'   => $email,
-            'password' => $password,
+            'nombre'       => $name,
+            'correo'       => $email,
+            'password'     => $password,
+            'numero_socio' => $memberNumber,
         ]);
 
         if ($result === 'conflict_email') {
             ResponseHelper::conflict('El correo electrónico ya está registrado.');
+        }
+
+        if ($result === 'conflict_member_number') {
+            ResponseHelper::conflict('El número de socio ya está registrado por otro criador.');
         }
 
         ResponseHelper::created($result, 'Criador creado exitosamente.');
@@ -157,38 +175,52 @@ class BreederController {
 
         $name = array_key_exists('nombre', $input)
             ? (is_string($input['nombre']) ? trim($input['nombre']) : '')
-            : $existing['nombre'];
+            : (string) $existing['nombre'];
 
         $email = array_key_exists('correo', $input)
             ? (is_string($input['correo']) ? trim($input['correo']) : '')
-            : $existing['correo'];
+            : (string) $existing['correo'];
 
-        // Si se envía numero_socio, no puede ser null ni vacío; si se omite, conserva el actual
-        $memberNumber = array_key_exists('numero_socio', $input)
-            ? $this->validateMemberNumber($input['numero_socio'])
-            : $existing['numero_socio'];
-
-        $hasPassword = array_key_exists('password', $input) && $input['password'] !== null && $input['password'] !== '';
-        $password = null;
+        $rawMemberNumber = array_key_exists('numero_socio', $input)
+            ? $input['numero_socio']
+            : (string) $existing['numero_socio'];
 
         $errors = [];
-        if ($name === '') {
-            $errors['nombre'] = 'El nombre es obligatorio.';
+
+        $nameError = $this->getNameError($name);
+        if ($nameError !== null) {
+            $errors['nombre'] = $nameError;
         }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors['correo'] = 'El correo electrónico no es válido.';
+
+        $emailError = $this->getEmailError($email);
+        if ($emailError !== null) {
+            $errors['correo'] = $emailError;
         }
-        if ($hasPassword) {
-            if (!is_string($input['password']) || mb_strlen(trim($input['password'])) < 8) {
-                $errors['password'] = 'La contraseña debe tener al menos 8 caracteres.';
+
+        $memberNumberError = $this->getMemberNumberError($rawMemberNumber);
+        if ($memberNumberError !== null) {
+            $errors['numero_socio'] = $memberNumberError;
+        }
+
+        $password = null;
+        if (array_key_exists('password', $input) && $input['password'] !== null && $input['password'] !== '') {
+            if (!is_string($input['password'])) {
+                $errors['password'] = 'La contraseña debe ser una cadena de texto de al menos 8 caracteres.';
             } else {
-                $password = trim($input['password']);
+                $trimmedPassword = trim($input['password']);
+                if (mb_strlen($trimmedPassword) < 8) {
+                    $errors['password'] = 'La contraseña debe tener al menos 8 caracteres.';
+                } else {
+                    $password = $trimmedPassword;
+                }
             }
         }
 
         if (!empty($errors)) {
             ResponseHelper::validationError($errors);
         }
+
+        $memberNumber = trim((string) $rawMemberNumber);
 
         $result = $breederModel->updateWithUser($breederId, [
             'nombre'       => $name,
@@ -223,10 +255,18 @@ class BreederController {
         }
 
         $breederModel = new Breeder();
-        $deleted = $breederModel->deleteWithUser($breederId);
+        $result = $breederModel->deleteWithUser($breederId);
 
-        if (!$deleted) {
+        if ($result === 'not_found') {
             ResponseHelper::notFound('No se encontró el criador especificado.');
+        }
+
+        if ($result === 'forbidden') {
+            ResponseHelper::forbidden('La base de datos no permite eliminar criadores según las políticas de seguridad del sistema.');
+        }
+
+        if ($result === 'conflict') {
+            ResponseHelper::conflict('No se puede eliminar el criador porque tiene registros o historial de auditoría asociado.');
         }
 
         ResponseHelper::noContent();
@@ -250,28 +290,66 @@ class BreederController {
     }
 
     /**
-     * Valida y normaliza numero_socio (VARCHAR(5) NOT NULL en PostgreSQL).
+     * Valida y normaliza numero_socio (1 a 5 dígitos numéricos, NOT NULL).
      */
     private function validateMemberNumber(mixed $value): string {
-        if ($value === null || (!is_string($value) && !is_numeric($value))) {
+        $error = $this->getMemberNumberError($value);
+        if ($error !== null) {
             ResponseHelper::validationError([
-                'numero_socio' => 'El número de socio es obligatorio y no puede ser nulo.',
+                'numero_socio' => $error,
             ]);
+        }
+
+        return trim((string) $value);
+    }
+
+    /**
+     * Comprueba que numero_socio sea obligatorio y tenga entre 1 y 5 dígitos numéricos.
+     */
+    private function getMemberNumberError(mixed $value): ?string {
+        if (!is_string($value) && !is_int($value)) {
+            return 'El número de socio es obligatorio y debe contener entre 1 y 5 dígitos.';
         }
 
         $trimmed = trim((string) $value);
-        if ($trimmed === '') {
-            ResponseHelper::validationError([
-                'numero_socio' => 'El número de socio no puede estar vacío.',
-            ]);
+        if (!preg_match('/^\d{1,5}$/', $trimmed)) {
+            return 'El número de socio debe contener entre 1 y 5 dígitos numéricos.';
         }
 
-        if (mb_strlen($trimmed) > 5) {
-            ResponseHelper::validationError([
-                'numero_socio' => 'El número de socio no puede exceder los 5 caracteres.',
-            ]);
+        return null;
+    }
+
+    /**
+     * Comprueba que el nombre sea obligatorio, tenga máximo 100 caracteres y no incluya HTML.
+     */
+    private function getNameError(string $name): ?string {
+        if ($name === '') {
+            return 'El nombre es obligatorio.';
         }
 
-        return $trimmed;
+        if (mb_strlen($name) > 100) {
+            return 'El nombre no puede superar los 100 caracteres.';
+        }
+
+        if (strip_tags($name) !== $name || !preg_match("/^[\p{L}\p{M}\s.'-]+$/u", $name)) {
+            return 'El nombre contiene caracteres o etiquetas HTML no permitidos.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Comprueba que el correo sea obligatorio, válido y no supere los 100 caracteres.
+     */
+    private function getEmailError(string $email): ?string {
+        if ($email === '') {
+            return 'El correo electrónico es obligatorio.';
+        }
+
+        if (mb_strlen($email) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return 'El correo electrónico no tiene un formato válido o supera los 100 caracteres.';
+        }
+
+        return null;
     }
 }

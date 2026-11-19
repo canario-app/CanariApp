@@ -69,6 +69,10 @@ final class App{
         );
 
         $baseUrl = rtrim(self::environmentValue('APP_URL', 'http://localhost'), '/');
+        $rawJwtExpiration = self::environmentValue('JWT_EXPIRATION', '7200');
+        $jwtExpiration = (is_numeric($rawJwtExpiration) && (int) $rawJwtExpiration > 0)
+            ? (int) $rawJwtExpiration
+            : 7200;
 
         self::$configuration = [
             'name' => self::environmentValue('APP_NAME', 'CanariApp'),
@@ -78,6 +82,7 @@ final class App{
             'timezone' => $timezone,
             'jwt' => [
                 'secret' => self::environmentValue('JWT_SECRET', 'clave_por_defecto_insegura'),
+                'expiration' => $jwtExpiration,
             ],
             'db' => [
                 'host' => self::environmentValue('DB_HOST', 'postgres'),

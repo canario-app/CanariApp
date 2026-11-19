@@ -23,7 +23,7 @@ final class AuthMiddleware {
         $payload = AuthHelper::validateToken($token);
 
         if ($payload === null) {
-            ResponseHelper::unauthorized('Token inválido o expirado.');
+            ResponseHelper::unauthorized('Token inválido, expirado o sesión cerrada.');
         }
 
         self::$currentUser = $payload;

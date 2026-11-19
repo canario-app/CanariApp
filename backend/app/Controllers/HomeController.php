@@ -39,6 +39,7 @@ class HomeController {
             ],
             'private_endpoints' => [
                 'me' => 'GET /api/v1/me',
+                'logout' => 'POST /api/v1/logout',
                 'criador_perfil' => 'GET|PUT /api/v1/criador/perfil',
                 'admin_register' => 'POST /api/v1/admin/register',
                 'admin_criadores' => 'GET|POST|PUT|DELETE /api/v1/admin/criadores',
