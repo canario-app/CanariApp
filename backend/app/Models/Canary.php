@@ -284,6 +284,76 @@ class Canary extends BaseModel {
     }
 
     /**
+     * Actualiza cualquier canario (incluyendo cambio de criador asignado) para administrador.
+     *
+     * Devuelve las filas afectadas (0 si no hubo cambios) o un código de
+     * error de dominio.
+     */
+    public function updateForAdmin(int $id, array $data): int|string {
+        $current = $this->find($id);
+        if ($current === null) {
+            return self::ERROR_NOT_FOUND;
+        }
+
+        $payload = $this->filterAssignable($data, true);
+        if ($payload === []) {
+            return 0;
+        }
+
+        $validation = $this->validate($payload, false);
+        if ($validation !== null) {
+            return $validation;
+        }
+        $payload = $this->normalizePayload($payload);
+
+        if (
+            array_key_exists('id_criador', $payload)
+            && !$this->breederExists($payload['id_criador'])
+        ) {
+            return self::ERROR_INVALID_REFERENCE;
+        }
+
+        $anillo = (string) ($payload['anillo'] ?? $current['anillo']);
+        $idClub = (int) ($payload['id_club'] ?? $current['id_club']);
+        $numeroSocio = (string) ($payload['numero_socio'] ?? $current['numero_socio']);
+        $temporada = (int) ($payload['temporada'] ?? $current['temporada']);
+
+        if ($this->anilloExists($anillo, $idClub, $numeroSocio, $temporada, $id)) {
+            return self::ERROR_CONFLICT_ANILLO;
+        }
+
+        $changingBreeder = array_key_exists('id_criador', $payload)
+            && (int) $payload['id_criador'] !== (int) $current['id_criador'];
+
+        try {
+            if ($changingBreeder) {
+                $this->fetch("SELECT set_config('canariapp.admin_transfer', 'on', false)");
+            }
+
+            return $this->updateBy(['id_canario' => $id], $payload);
+        } catch (PDOException $exception) {
+            return $this->mapWriteException($exception);
+        } finally {
+            if ($changingBreeder) {
+                $this->fetch("SELECT set_config('canariapp.admin_transfer', 'off', false)");
+            }
+        }
+    }
+
+    /**
+     * Verifica que el criador exista en el sistema.
+     */
+    private function breederExists(int $idCriador): bool {
+        $sql = 'SELECT 1
+                FROM criador c
+                INNER JOIN usuario u ON u.id_usuario = c.id_usuario
+                WHERE c.id_criador = :id_criador
+                LIMIT 1';
+
+        return $this->fetch($sql, ['id_criador' => $idCriador]) !== null;
+    }
+
+    /**
      * SELECT base con los datos del canario y los nombres relacionados.
      */
     private function detailedSelect(): string {
@@ -305,8 +375,13 @@ class Canary extends BaseModel {
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
-    private function filterAssignable(array $data): array {
-        return array_intersect_key($data, array_flip(self::ASSIGNABLE_FIELDS));
+    private function filterAssignable(array $data, bool $allowBreederChange = false): array {
+        $allowed = self::ASSIGNABLE_FIELDS;
+        if ($allowBreederChange) {
+            $allowed[] = 'id_criador';
+        }
+
+        return array_intersect_key($data, array_flip($allowed));
     }
 
     /**
@@ -338,14 +413,8 @@ class Canary extends BaseModel {
             }
         }
 
-        if (array_key_exists('id_club', $data)) {
-            if ($this->positiveInt($data['id_club']) === null) {
-                return self::ERROR_INVALID_DATA;
-            }
-        }
-
-        if (array_key_exists('id_variedad', $data)) {
-            if ($this->positiveInt($data['id_variedad']) === null) {
+        foreach (['id_club', 'id_variedad', 'id_criador'] as $field) {
+            if (array_key_exists($field, $data) && $this->positiveInt($data[$field]) === null) {
                 return self::ERROR_INVALID_DATA;
             }
         }
@@ -396,7 +465,7 @@ class Canary extends BaseModel {
         if (array_key_exists('numero_socio', $payload)) {
             $payload['numero_socio'] = trim((string) $payload['numero_socio']);
         }
-        foreach (['id_club', 'id_variedad', 'temporada'] as $field) {
+        foreach (['id_club', 'id_variedad', 'temporada', 'id_criador'] as $field) {
             if (array_key_exists($field, $payload)) {
                 $payload[$field] = (int) $payload[$field];
             }

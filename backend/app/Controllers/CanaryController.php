@@ -111,11 +111,13 @@ class CanaryController {
 
         $this->assertVisible($actual);
 
-        $result = $model->updateForBreeder(
-            $idCanario,
-            $this->filterFields($input),
-            (int) $actual['id_criador']
-        );
+        $result = $this->isAdmin()
+            ? $model->updateForAdmin($idCanario, $this->filterFields($input, true))
+            : $model->updateForBreeder(
+                $idCanario,
+                $this->filterFields($input),
+                (int) $actual['id_criador']
+            );
 
         if (is_string($result)) {
             $this->handleError($result);
@@ -160,6 +162,13 @@ class CanaryController {
             $errors['id_criador'] = 'El criador se toma del usuario autenticado.';
         }
 
+        if ($this->isAdmin()) {
+            $hasBreeder = array_key_exists('id_criador', $input);
+            if (($isCreate || $hasBreeder) && $this->positiveInt($input['id_criador'] ?? null) === null) {
+                $errors['id_criador'] = 'Debe indicar un identificador de criador válido.';
+            }
+        }
+
         if ($isCreate && $this->isAdmin() && $this->positiveInt($input['id_criador'] ?? null) === null) {
             $errors['id_criador'] = 'El administrador debe indicar el criador dueño del ejemplar.';
         }
@@ -198,8 +207,13 @@ class CanaryController {
      * @param array<string, mixed> $input
      * @return array<string, mixed>
      */
-    private function filterFields(array $input): array {
-        return array_intersect_key($input, array_flip(self::WRITABLE_FIELDS));
+    private function filterFields(array $input, bool $includeBreeder = false): array {
+        $allowed = self::WRITABLE_FIELDS;
+        if ($includeBreeder) {
+            $allowed[] = 'id_criador';
+        }
+
+        return array_intersect_key($input, array_flip($allowed));
     }
 
     private function validationMessage(string $field): string {
