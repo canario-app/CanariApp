@@ -338,14 +338,8 @@ class Canary extends BaseModel {
             }
         }
 
-        if (array_key_exists('id_club', $data)) {
-            if ($this->positiveInt($data['id_club']) === null) {
-                return self::ERROR_INVALID_DATA;
-            }
-        }
-
-        if (array_key_exists('id_variedad', $data)) {
-            if ($this->positiveInt($data['id_variedad']) === null) {
+        foreach (['id_club', 'id_variedad'] as $field) {
+            if (array_key_exists($field, $data) && $this->positiveInt($data[$field]) === null) {
                 return self::ERROR_INVALID_DATA;
             }
         }

@@ -15,12 +15,13 @@ class AuthController {
      * Inicia sesión verificando credenciales y devolviendo un JWT.
      */
     public function login(): void {
-        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $decoded = json_decode(file_get_contents('php://input') ?: '', true);
+        $input = is_array($decoded) ? $decoded : [];
 
-        $correo = $input['correo'] ?? null;
-        $password = $input['password'] ?? null;
+        $correo = is_string($input['correo'] ?? null) ? mb_strtolower(trim($input['correo'])) : '';
+        $password = is_string($input['password'] ?? null) ? $input['password'] : '';
 
-        if (!$correo || !$password) {
+        if ($correo === '' || $password === '') {
             ResponseHelper::badRequest('El correo y la contraseña son obligatorios.');
         }
 
@@ -41,39 +42,94 @@ class AuthController {
 
         ResponseHelper::success([
             'token' => $token,
-            'user' => $user,
+            'user'  => $user,
         ], 'Inicio de sesión exitoso.');
+    }
+
+    /**
+     * [Autenticado] Cierra la sesión actual revocando el token JWT enviado.
+     */
+    public function logout(): void {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION']
+            ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+            ?? '';
+
+        if ($authHeader === '' && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        }
+
+        if (!preg_match('/^Bearer\s+(\S+)$/i', trim($authHeader), $matches)) {
+            ResponseHelper::unauthorized('Token de autorización no proporcionado.');
+        }
+
+        $token = $matches[1];
+        $payload = AuthHelper::validateToken($token);
+
+        if ($payload === null || !isset($payload->sub)) {
+            ResponseHelper::unauthorized('Token inválido, expirado o sesión ya cerrada.');
+        }
+
+        AuthHelper::revokeToken($token, (int) $payload->sub);
+
+        ResponseHelper::success(null, 'Sesión cerrada exitosamente.');
     }
 
     /**
      * [Admin] Registra un nuevo usuario con rol 'criador' y crea su perfil asociado.
      */
     public function register(): void {
-        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $decoded = json_decode(file_get_contents('php://input') ?: '', true);
+        $input = is_array($decoded) ? $decoded : [];
 
-        $nombre = trim((string) ($input['nombre'] ?? ''));
-        $correo = trim((string) ($input['correo'] ?? ''));
-        $password = (string) ($input['password'] ?? '');
+        $nombre = is_string($input['nombre'] ?? null) ? trim($input['nombre']) : '';
+        $correo = is_string($input['correo'] ?? null) ? mb_strtolower(trim($input['correo'])) : '';
+        $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
         $numeroSocioRaw = $input['numero_socio'] ?? null;
 
-        if ($nombre === '' || $correo === '' || $password === '') {
-            ResponseHelper::badRequest('Nombre, correo y contraseña son obligatorios.');
+        $isMissingMemberNumber = !array_key_exists('numero_socio', $input)
+            || $numeroSocioRaw === null
+            || (is_string($numeroSocioRaw) && trim($numeroSocioRaw) === '');
+
+        if ($nombre === '' || $correo === '' || $password === '' || $isMissingMemberNumber) {
+            ResponseHelper::badRequest('Nombre, correo, contraseña y número de socio son obligatorios.');
         }
 
-        $numeroSocio = null;
-        if ($numeroSocioRaw !== null && trim((string) $numeroSocioRaw) !== '') {
-            $numeroSocio = trim((string) $numeroSocioRaw);
-            if (mb_strlen($numeroSocio) > 5) {
-                ResponseHelper::validationError([
-                    'numero_socio' => 'El número de socio no puede exceder los 5 caracteres.',
-                ]);
-            }
+        $numeroSocio = (is_string($numeroSocioRaw) || is_int($numeroSocioRaw))
+            ? trim((string) $numeroSocioRaw)
+            : '';
+
+        $errors = [];
+        if (mb_strlen($nombre) > 100) {
+            $errors['nombre'] = 'El nombre no puede superar los 100 caracteres.';
+        } elseif (strip_tags($nombre) !== $nombre || !preg_match("/^[\p{L}\p{M}\s.'-]+$/u", $nombre)) {
+            $errors['nombre'] = 'El nombre contiene caracteres o etiquetas HTML no permitidos.';
+        }
+
+        if (mb_strlen($correo) > 100 || !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+            $errors['correo'] = 'El correo electrónico no tiene un formato válido o supera los 100 caracteres.';
+        }
+
+        if (mb_strlen($password) < 8) {
+            $errors['password'] = 'La contraseña debe tener al menos 8 caracteres.';
+        }
+
+        if (!preg_match('/^\d{1,5}$/', $numeroSocio)) {
+            $errors['numero_socio'] = 'El número de socio debe contener entre 1 y 5 dígitos numéricos.';
+        }
+
+        if (!empty($errors)) {
+            ResponseHelper::validationError($errors);
         }
 
         $userModel = new User();
-
         if ($userModel->findByCorreo($correo)) {
             ResponseHelper::conflict('El correo ya está registrado en el sistema.');
+        }
+
+        $criadorModel = new Breeder();
+        if ($criadorModel->existsByMemberNumber($numeroSocio)) {
+            ResponseHelper::conflict('El número de socio ya está registrado por otro criador.');
         }
 
         $rol = 'criador';
@@ -82,15 +138,14 @@ class AuthController {
             $userModel->beginTransaction();
 
             $userId = $userModel->create([
-                'nombre' => $nombre,
-                'correo' => $correo,
+                'nombre'   => $nombre,
+                'correo'   => $correo,
                 'password' => $password,
-                'rol' => $rol,
+                'rol'      => $rol,
             ]);
 
-            $criadorModel = new Breeder();
             $criadorId = $criadorModel->create([
-                'id_usuario' => $userId,
+                'id_usuario'   => $userId,
                 'numero_socio' => $numeroSocio,
             ]);
 
@@ -102,11 +157,11 @@ class AuthController {
 
         ResponseHelper::created([
             'user' => [
-                'id_usuario' => $userId,
-                'id_criador' => $criadorId,
-                'nombre' => $nombre,
-                'correo' => $correo,
-                'rol' => $rol,
+                'id_usuario'   => $userId,
+                'id_criador'   => $criadorId,
+                'nombre'       => $nombre,
+                'correo'       => $correo,
+                'rol'          => $rol,
                 'numero_socio' => $numeroSocio,
             ],
         ], 'Criador registrado exitosamente por el administrador.');

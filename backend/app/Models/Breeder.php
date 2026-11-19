@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace CanariApp\Backend\Models;
 
 use CanariApp\Backend\Config\Db;
-use PDO;
-use RuntimeException;
+use PDOException;
 use Throwable;
 
 class Breeder extends BaseModel {
@@ -81,9 +80,16 @@ class Breeder extends BaseModel {
                 $db->beginTransaction();
             }
 
+            $memberNumber = trim((string) ($data['numero_socio'] ?? ''));
+
             // Caso 1: AuthController::register ya creó el usuario y envía 'id_usuario'
             if (isset($data['id_usuario'])) {
-                $memberNumber = $this->generateMemberNumber($db);
+                if ($memberNumber === '' || $this->existsByMemberNumber($memberNumber)) {
+                    if ($startedTransaction) {
+                        $db->rollBack();
+                    }
+                    return 'conflict_member_number';
+                }
 
                 $breederId = (int) $this->insert([
                     'id_usuario'   => (int) $data['id_usuario'],
@@ -99,19 +105,25 @@ class Breeder extends BaseModel {
 
             // Caso 2: Alta completa de usuario + criador (BreederController::store)
             $userModel = new User();
+            $normalizedEmail = mb_strtolower(trim((string) $data['correo']), 'UTF-8');
 
-            if ($userModel->existsByEmail($data['correo'])) {
+            if ($userModel->existsByEmail($normalizedEmail)) {
                 if ($startedTransaction) {
                     $db->rollBack();
                 }
                 return 'conflict_email';
             }
 
-            $memberNumber = $this->generateMemberNumber($db);
+            if ($this->existsByMemberNumber($memberNumber)) {
+                if ($startedTransaction) {
+                    $db->rollBack();
+                }
+                return 'conflict_member_number';
+            }
 
             $userId = (int) $userModel->create([
                 'nombre'   => $data['nombre'],
-                'correo'   => $data['correo'],
+                'correo'   => $normalizedEmail,
                 'password' => $data['password'],
                 'rol'      => 'criador',
             ]);
@@ -129,7 +141,7 @@ class Breeder extends BaseModel {
                 'id_criador'   => $breederId,
                 'id_usuario'   => $userId,
                 'nombre'       => $data['nombre'],
-                'correo'       => $data['correo'],
+                'correo'       => $normalizedEmail,
                 'rol'          => 'criador',
                 'numero_socio' => $memberNumber,
             ];
@@ -147,6 +159,7 @@ class Breeder extends BaseModel {
     public function updateWithUser(int $breederId, array $data): array|string {
         $db = Db::getConnection();
         $userModel = new User();
+        $normalizedEmail = mb_strtolower(trim((string) $data['correo']), 'UTF-8');
 
         try {
             $db->beginTransaction();
@@ -160,23 +173,13 @@ class Breeder extends BaseModel {
             $userId = (int) $existing['id_usuario'];
 
             // 2. Verificar que el correo no esté ocupado por otro usuario
-            if ($userModel->existsByEmail($data['correo'], $userId)) {
+            if ($userModel->existsByEmail($normalizedEmail, $userId)) {
                 $db->rollBack();
                 return 'conflict_email';
             }
 
             // 3. Verificar que el número de socio no pertenezca a otro criador
-            $stmtMember = $db->prepare(
-                "SELECT 1 FROM {$this->table}
-                 WHERE numero_socio = :numero_socio AND id_criador <> :id_criador
-                 LIMIT 1"
-            );
-            $stmtMember->execute([
-                'numero_socio' => $data['numero_socio'],
-                'id_criador'   => $breederId,
-            ]);
-
-            if ($stmtMember->fetchColumn() !== false) {
+            if ($this->existsByMemberNumber((string) $data['numero_socio'], $breederId)) {
                 $db->rollBack();
                 return 'conflict_member_number';
             }
@@ -189,7 +192,7 @@ class Breeder extends BaseModel {
             // 5. Delegar actualización de usuario al modelo User
             $userModel->updateUser($userId, [
                 'nombre'   => $data['nombre'],
-                'correo'   => $data['correo'],
+                'correo'   => $normalizedEmail,
                 'password' => $data['password'] ?? null,
             ]);
 
@@ -199,7 +202,7 @@ class Breeder extends BaseModel {
                 'id_criador'   => $breederId,
                 'id_usuario'   => $userId,
                 'nombre'       => $data['nombre'],
-                'correo'       => $data['correo'],
+                'correo'       => $normalizedEmail,
                 'numero_socio' => $data['numero_socio'],
             ];
         } catch (Throwable $e) {
@@ -212,8 +215,10 @@ class Breeder extends BaseModel {
 
     /**
      * Elimina el perfil de criador y delega en User la eliminación de su cuenta.
+     *
+     * @return string 'deleted' | 'not_found' | 'forbidden' | 'conflict'
      */
-    public function deleteWithUser(int $breederId): bool {
+    public function deleteWithUser(int $breederId): string {
         $db = Db::getConnection();
         $userModel = new User();
 
@@ -223,16 +228,37 @@ class Breeder extends BaseModel {
             $existing = $this->find($breederId);
             if ($existing === null) {
                 $db->rollBack();
-                return false;
+                return 'not_found';
             }
             $userId = (int) $existing['id_usuario'];
 
             $this->delete($breederId);
             $deleted = $userModel->deleteBreederUser($userId);
 
+            if (!$deleted) {
+                $db->rollBack();
+                return 'not_found';
+            }
+
             $db->commit();
 
-            return $deleted;
+            return 'deleted';
+        } catch (PDOException $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            $sqlState = (string) $e->getCode();
+
+            if ($sqlState === '42501') {
+                return 'forbidden';
+            }
+
+            if ($sqlState === '23503') {
+                return 'conflict';
+            }
+
+            throw $e;
         } catch (Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -242,22 +268,24 @@ class Breeder extends BaseModel {
     }
 
     /**
-     * Genera el siguiente número de socio correlativo de 5 dígitos (00001..99999) bloqueando inserciones concurrentes.
+     * Verifica si un número de socio ya está registrado por otro criador.
      */
-    private function generateMemberNumber(PDO $db): string {
-        $db->exec('LOCK TABLE criador IN SHARE ROW EXCLUSIVE MODE');
+    public function existsByMemberNumber(string $memberNumber, ?int $excludeBreederId = null): bool {
+        if ($excludeBreederId !== null) {
+            $sql = "SELECT 1 FROM {$this->table}
+                    WHERE numero_socio = :numero_socio AND id_criador <> :id_criador
+                    LIMIT 1";
 
-        $stmt = $db->query(
-            "SELECT COALESCE(MAX(CAST(numero_socio AS INTEGER)), 0) + 1
-             FROM criador
-             WHERE numero_socio ~ '^[0-9]{1,5}$'"
-        );
-        $nextNumber = (int) $stmt->fetchColumn();
-
-        if ($nextNumber > 99999) {
-            throw new RuntimeException('Se alcanzó el límite máximo de números de socio (99999).');
+            return $this->fetch($sql, [
+                'numero_socio' => $memberNumber,
+                'id_criador'   => $excludeBreederId,
+            ]) !== null;
         }
 
-        return str_pad((string) $nextNumber, 5, '0', STR_PAD_LEFT);
+        $sql = "SELECT 1 FROM {$this->table}
+                WHERE numero_socio = :numero_socio
+                LIMIT 1";
+
+        return $this->fetch($sql, ['numero_socio' => $memberNumber]) !== null;
     }
 }

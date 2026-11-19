@@ -45,6 +45,8 @@ final class Router {
             );
         });
 
+        $this->router->post('/api/v1/logout', AuthController::class . '@logout');
+
         // Perfil del criador autenticado
         $this->router->get('/api/v1/criador/perfil', BreederController::class . '@myProfile');
         $this->router->put('/api/v1/criador/perfil', BreederController::class . '@updateProfile');
