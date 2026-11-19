@@ -8,43 +8,68 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 
 class HomeController {
     /**
-     * Endpoint raíz de bienvenida a la API.
+     * Punto de entrada raíz de la API.
      */
     public function index(): void {
         ResponseHelper::success([
-            'app' => 'CanariApp API',
+            'service' => 'CanariApp API',
             'version' => 'v1',
-            'documentation' => '/api/v1',
+            'links'   => [
+                'health' => 'GET /api/health',
+                'v1'     => 'GET /api/v1',
+                'login'  => 'POST /api/login',
+            ],
         ], 'Bienvenido a la API de CanariApp.');
     }
 
     /**
-     * Comprueba que el servidor PHP esté respondiendo correctamente.
+     * Verifica el estado operativo del servicio.
      */
     public function health(): void {
         ResponseHelper::success([
-            'service' => 'ok',
-            'timestamp' => date('c'),
-        ], 'Backend disponible.');
+            'status'    => 'ok',
+            'timezone'  => date_default_timezone_get(),
+            'timestamp' => date(DATE_ATOM),
+        ], 'Servicio operativo.');
     }
 
     /**
-     * Devuelve el mapa general de endpoints públicos y privados de la v1.
+     * Devuelve el índice general de endpoints disponibles en la versión 1.
      */
     public function v1(): void {
         ResponseHelper::success([
-            'public_endpoints' => [
-                'health' => 'GET /api/health',
-                'login' => 'POST /api/login',
+            'base_path' => '/api/v1',
+            'endpoints' => [
+                'public' => [
+                    'GET /',
+                    'GET /api/health',
+                    'GET /api/v1',
+                    'POST /api/login',
+                ],
+                'session' => [
+                    'GET /api/v1/me',
+                    'POST /api/v1/logout',
+                ],
+                'breeder_profile' => [
+                    'GET /api/v1/criador/perfil',
+                    'PUT /api/v1/criador/perfil',
+                ],
+                'admin_breeders' => [
+                    'GET /api/v1/admin/criadores',
+                    'GET /api/v1/admin/criadores/{id}',
+                    'POST /api/v1/admin/criadores',
+                    'POST /api/v1/admin/register',
+                    'PUT /api/v1/admin/criadores/{id}',
+                    'DELETE /api/v1/admin/criadores/{id}',
+                ],
+                'canaries' => [
+                    'GET /api/v1/canarios',
+                    'GET /api/v1/canarios/{id}',
+                    'POST /api/v1/canarios',
+                    'PUT /api/v1/canarios/{id}',
+                    'PATCH /api/v1/canarios/{id}',
+                ],
             ],
-            'private_endpoints' => [
-                'me' => 'GET /api/v1/me',
-                'logout' => 'POST /api/v1/logout',
-                'criador_perfil' => 'GET|PUT /api/v1/criador/perfil',
-                'admin_register' => 'POST /api/v1/admin/register',
-                'admin_criadores' => 'GET|POST|PUT|DELETE /api/v1/admin/criadores',
-                'admin_criadores_buscar' => 'GET|POST|PUT|DELETE /api/v1/admin/criadores/?buscar={termino}',
-            ],
-        ], 'API CanariApp v1');
+        ], 'Índice de endpoints de CanariApp API v1.');
     }
 }

@@ -404,9 +404,8 @@ abstract class BaseModel{
         return $this->db->commit();
     }
 
-    public static function rollBack(): bool {
-        $connection = Db::getConnection();
-        return $connection->inTransaction() ? $connection->rollBack() : false;
+    public function rollBack(): bool {
+        return $this->db->inTransaction() ? $this->db->rollBack() : false;
     }
 
     public function inTransaction(): bool{
