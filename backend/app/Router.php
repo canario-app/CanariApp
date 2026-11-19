@@ -7,6 +7,7 @@ namespace CanariApp\Backend;
 use Bramus\Router\Router as BramusRouter;
 use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
+use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
@@ -58,6 +59,13 @@ final class Router {
         $this->router->put('/api/v1/admin/criadores/(\d+)', BreederController::class . '@update');
         
         $this->router->delete('/api/v1/admin/criadores/(\d+)', BreederController::class . '@destroy');
+
+        // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
+        $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
+        $this->router->get('/api/v1/canarios/(\d+)', CanaryController::class . '@show');
+        $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
+        $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+        $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
 
         // --- 404 ---
         $this->router->set404(function (): void {

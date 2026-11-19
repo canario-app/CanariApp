@@ -42,6 +42,7 @@ class HomeController {
                 'criador_perfil' => 'GET|PUT /api/v1/criador/perfil',
                 'admin_register' => 'POST /api/v1/admin/register',
                 'admin_criadores' => 'GET|POST|PUT|DELETE /api/v1/admin/criadores',
+                'admin_criadores_buscar' => 'GET|POST|PUT|DELETE /api/v1/admin/criadores/?buscar={termino}',
             ],
         ], 'API CanariApp v1');
     }

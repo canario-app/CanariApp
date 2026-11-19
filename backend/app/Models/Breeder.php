@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace CanariApp\Backend\Models;
 
 use CanariApp\Backend\Config\Db;
+use PDO;
+use RuntimeException;
 use Throwable;
 
 class Breeder extends BaseModel {
@@ -53,105 +55,147 @@ class Breeder extends BaseModel {
     }
 
     /**
-     * Crea un perfil de criador vinculado a un usuario existente.
+     * Busca criadores por coincidencia parcial en nombre, número de socio o correo.
      */
-    public function create(array $data): int|string|null {
-        return $this->insert([
-            'id_usuario'   => $data['id_usuario'],
-            'numero_socio' => $data['numero_socio'] ?? null,
-        ]);
-    }
-
-    /**
-     * Busca criadores por coincidencia parcial en el nombre del usuario.
-     */
-    public function searchByName(string $name): array {
+    public function search(string $term): array {
         $sql = "SELECT c.id_criador, c.id_usuario, c.numero_socio, c.fecha_creacion,
                        u.nombre, u.correo, u.rol
                 FROM {$this->table} c
                 INNER JOIN usuario u ON c.id_usuario = u.id_usuario
-                WHERE u.nombre ILIKE :nombre
-                ORDER BY u.nombre ASC";
+                WHERE u.nombre ILIKE :term
+                   OR c.numero_socio ILIKE :term
+                   OR u.correo ILIKE :term
+                ORDER BY c.id_criador DESC";
 
         return $this->fetchAll($sql, [
-            'nombre' => '%' . trim($name) . '%',
+            'term' => '%' . trim($term) . '%',
         ]);
     }
 
+    public function create(array $data): array|int|string|null {
+        $db = Db::getConnection();
+        $startedTransaction = !$db->inTransaction();
+
+        try {
+            if ($startedTransaction) {
+                $db->beginTransaction();
+            }
+
+            // Caso 1: AuthController::register ya creó el usuario y envía 'id_usuario'
+            if (isset($data['id_usuario'])) {
+                $memberNumber = $this->generateMemberNumber($db);
+
+                $breederId = (int) $this->insert([
+                    'id_usuario'   => (int) $data['id_usuario'],
+                    'numero_socio' => $memberNumber,
+                ]);
+
+                if ($startedTransaction) {
+                    $db->commit();
+                }
+
+                return $breederId;
+            }
+
+            // Caso 2: Alta completa de usuario + criador (BreederController::store)
+            $userModel = new User();
+
+            if ($userModel->existsByEmail($data['correo'])) {
+                if ($startedTransaction) {
+                    $db->rollBack();
+                }
+                return 'conflict_email';
+            }
+
+            $memberNumber = $this->generateMemberNumber($db);
+
+            $userId = (int) $userModel->create([
+                'nombre'   => $data['nombre'],
+                'correo'   => $data['correo'],
+                'password' => $data['password'],
+                'rol'      => 'criador',
+            ]);
+
+            $breederId = (int) $this->insert([
+                'id_usuario'   => $userId,
+                'numero_socio' => $memberNumber,
+            ]);
+
+            if ($startedTransaction) {
+                $db->commit();
+            }
+
+            return $this->findWithUser($breederId) ?? [
+                'id_criador'   => $breederId,
+                'id_usuario'   => $userId,
+                'nombre'       => $data['nombre'],
+                'correo'       => $data['correo'],
+                'rol'          => 'criador',
+                'numero_socio' => $memberNumber,
+            ];
+        } catch (Throwable $e) {
+            if ($startedTransaction && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     /**
-     * Actualiza el perfil de criador y su cuenta de usuario asociada en una sola transacción.
+     * [Admin] Actualiza el perfil de criador y delega en User los cambios de cuenta en una transacción.
      */
     public function updateWithUser(int $breederId, array $data): array|string {
         $db = Db::getConnection();
+        $userModel = new User();
 
         try {
             $db->beginTransaction();
 
-            // 1. Verificar que el criador exista y obtener su id_usuario
-            $stmtFind = $db->prepare('SELECT id_usuario FROM criador WHERE id_criador = :id_criador');
-            $stmtFind->execute(['id_criador' => $breederId]);
-            $userId = $stmtFind->fetchColumn();
-
-            if ($userId === false) {
+            // 1. Verificar que el criador exista
+            $existing = $this->find($breederId);
+            if ($existing === null) {
                 $db->rollBack();
                 return 'not_found';
             }
-            $userId = (int) $userId;
+            $userId = (int) $existing['id_usuario'];
 
-            // 2. Verificar que el correo o número de socio no estén ocupados por otro registro
-            $stmtDup = $db->prepare(
-                'SELECT 1 FROM usuario u
-                 INNER JOIN criador c ON c.id_usuario = u.id_usuario
-                 WHERE (u.correo = :correo AND u.id_usuario <> :id_usuario)
-                    OR (c.numero_socio = :numero_socio AND c.id_criador <> :id_criador)'
-            );
-            $stmtDup->execute([
-                'correo'       => $data['correo'],
-                'id_usuario'   => $userId,
-                'numero_socio' => $data['numero_socio'],
-                'id_criador'   => $breederId,
-            ]);
-
-            if ($stmtDup->fetchColumn() !== false) {
+            // 2. Verificar que el correo no esté ocupado por otro usuario
+            if ($userModel->existsByEmail($data['correo'], $userId)) {
                 $db->rollBack();
-                return 'conflict';
+                return 'conflict_email';
             }
 
-            // 3. Actualizar tabla criador
-            $stmtBreeder = $db->prepare(
-                'UPDATE criador SET numero_socio = :numero_socio WHERE id_criador = :id_criador'
+            // 3. Verificar que el número de socio no pertenezca a otro criador
+            $stmtMember = $db->prepare(
+                "SELECT 1 FROM {$this->table}
+                 WHERE numero_socio = :numero_socio AND id_criador <> :id_criador
+                 LIMIT 1"
             );
-            $stmtBreeder->execute([
+            $stmtMember->execute([
                 'numero_socio' => $data['numero_socio'],
                 'id_criador'   => $breederId,
             ]);
 
-            // 4. Actualizar tabla usuario (con o sin cambio de contraseña)
-            $plainPassword = $data['password'] ?? $data['password_hash'] ?? null;
-            if (!empty($plainPassword)) {
-                $stmtUser = $db->prepare(
-                    'UPDATE usuario SET nombre = :nombre, correo = :correo, password_hash = :password_hash WHERE id_usuario = :id_usuario'
-                );
-                $stmtUser->execute([
-                    'nombre'        => $data['nombre'],
-                    'correo'        => $data['correo'],
-                    'password_hash' => password_hash((string) $plainPassword, PASSWORD_DEFAULT),
-                    'id_usuario'    => $userId,
-                ]);
-            } else {
-                $stmtUser = $db->prepare(
-                    'UPDATE usuario SET nombre = :nombre, correo = :correo WHERE id_usuario = :id_usuario'
-                );
-                $stmtUser->execute([
-                    'nombre'     => $data['nombre'],
-                    'correo'     => $data['correo'],
-                    'id_usuario' => $userId,
-                ]);
+            if ($stmtMember->fetchColumn() !== false) {
+                $db->rollBack();
+                return 'conflict_member_number';
             }
+
+            // 4. Actualizar tabla criador
+            $this->update($breederId, [
+                'numero_socio' => $data['numero_socio'],
+            ]);
+
+            // 5. Delegar actualización de usuario al modelo User
+            $userModel->updateUser($userId, [
+                'nombre'   => $data['nombre'],
+                'correo'   => $data['correo'],
+                'password' => $data['password'] ?? null,
+            ]);
 
             $db->commit();
 
-            return [
+            return $this->findWithUser($breederId) ?? [
                 'id_criador'   => $breederId,
                 'id_usuario'   => $userId,
                 'nombre'       => $data['nombre'],
@@ -167,37 +211,53 @@ class Breeder extends BaseModel {
     }
 
     /**
-     * Elimina un criador junto con su cuenta de usuario.
+     * Elimina el perfil de criador y delega en User la eliminación de su cuenta.
      */
     public function deleteWithUser(int $breederId): bool {
         $db = Db::getConnection();
+        $userModel = new User();
 
         try {
             $db->beginTransaction();
 
-            $stmtBreeder = $db->prepare('DELETE FROM criador WHERE id_criador = :id_criador RETURNING id_usuario');
-            $stmtBreeder->execute(['id_criador' => $breederId]);
-            $userId = $stmtBreeder->fetchColumn();
-
-            if ($userId === false) {
+            $existing = $this->find($breederId);
+            if ($existing === null) {
                 $db->rollBack();
                 return false;
             }
+            $userId = (int) $existing['id_usuario'];
 
-            $stmtUser = $db->prepare('DELETE FROM usuario WHERE id_usuario = :id_usuario AND rol = :rol');
-            $stmtUser->execute([
-                'id_usuario' => (int) $userId,
-                'rol'        => 'criador',
-            ]);
+            $this->delete($breederId);
+            $deleted = $userModel->deleteBreederUser($userId);
 
             $db->commit();
 
-            return $stmtUser->rowCount() > 0;
+            return $deleted;
         } catch (Throwable $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
             throw $e;
         }
+    }
+
+    /**
+     * Genera el siguiente número de socio correlativo de 5 dígitos (00001..99999) bloqueando inserciones concurrentes.
+     */
+    private function generateMemberNumber(PDO $db): string {
+        $db->exec('LOCK TABLE criador IN SHARE ROW EXCLUSIVE MODE');
+
+        $stmt = $db->query(
+            "SELECT COALESCE(MAX(CAST(numero_socio AS INTEGER)), 0) + 1
+             FROM criador
+             WHERE numero_socio ~ '^[0-9]{1,5}$'"
+        );
+        $nextNumber = (int) $stmt->fetchColumn();
+
+        if ($nextNumber > 99999) {
+            throw new RuntimeException('Se alcanzó el límite máximo de números de socio (99999).');
+        }
+
+        return str_pad((string) $nextNumber, 5, '0', STR_PAD_LEFT);
     }
 }
