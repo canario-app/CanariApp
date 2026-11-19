@@ -105,8 +105,9 @@ class Breeder extends BaseModel {
 
             // Caso 2: Alta completa de usuario + criador (BreederController::store)
             $userModel = new User();
+            $normalizedEmail = mb_strtolower(trim((string) $data['correo']), 'UTF-8');
 
-            if ($userModel->existsByEmail($data['correo'])) {
+            if ($userModel->existsByEmail($normalizedEmail)) {
                 if ($startedTransaction) {
                     $db->rollBack();
                 }
@@ -122,7 +123,7 @@ class Breeder extends BaseModel {
 
             $userId = (int) $userModel->create([
                 'nombre'   => $data['nombre'],
-                'correo'   => $data['correo'],
+                'correo'   => $normalizedEmail,
                 'password' => $data['password'],
                 'rol'      => 'criador',
             ]);
@@ -140,7 +141,7 @@ class Breeder extends BaseModel {
                 'id_criador'   => $breederId,
                 'id_usuario'   => $userId,
                 'nombre'       => $data['nombre'],
-                'correo'       => $data['correo'],
+                'correo'       => $normalizedEmail,
                 'rol'          => 'criador',
                 'numero_socio' => $memberNumber,
             ];
@@ -158,6 +159,7 @@ class Breeder extends BaseModel {
     public function updateWithUser(int $breederId, array $data): array|string {
         $db = Db::getConnection();
         $userModel = new User();
+        $normalizedEmail = mb_strtolower(trim((string) $data['correo']), 'UTF-8');
 
         try {
             $db->beginTransaction();
@@ -171,23 +173,13 @@ class Breeder extends BaseModel {
             $userId = (int) $existing['id_usuario'];
 
             // 2. Verificar que el correo no esté ocupado por otro usuario
-            if ($userModel->existsByEmail($data['correo'], $userId)) {
+            if ($userModel->existsByEmail($normalizedEmail, $userId)) {
                 $db->rollBack();
                 return 'conflict_email';
             }
 
             // 3. Verificar que el número de socio no pertenezca a otro criador
-            $stmtMember = $db->prepare(
-                "SELECT 1 FROM {$this->table}
-                 WHERE numero_socio = :numero_socio AND id_criador <> :id_criador
-                 LIMIT 1"
-            );
-            $stmtMember->execute([
-                'numero_socio' => $data['numero_socio'],
-                'id_criador'   => $breederId,
-            ]);
-
-            if ($stmtMember->fetchColumn() !== false) {
+            if ($this->existsByMemberNumber((string) $data['numero_socio'], $breederId)) {
                 $db->rollBack();
                 return 'conflict_member_number';
             }
@@ -200,7 +192,7 @@ class Breeder extends BaseModel {
             // 5. Delegar actualización de usuario al modelo User
             $userModel->updateUser($userId, [
                 'nombre'   => $data['nombre'],
-                'correo'   => $data['correo'],
+                'correo'   => $normalizedEmail,
                 'password' => $data['password'] ?? null,
             ]);
 
@@ -210,7 +202,7 @@ class Breeder extends BaseModel {
                 'id_criador'   => $breederId,
                 'id_usuario'   => $userId,
                 'nombre'       => $data['nombre'],
-                'correo'       => $data['correo'],
+                'correo'       => $normalizedEmail,
                 'numero_socio' => $data['numero_socio'],
             ];
         } catch (Throwable $e) {

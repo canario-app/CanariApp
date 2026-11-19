@@ -14,34 +14,40 @@ class User extends BaseModel {
      * Busca un usuario por su correo electrónico.
      */
     public function findByCorreo(string $correo): ?array {
-        $sql = "SELECT * FROM {$this->table} WHERE correo = :correo LIMIT 1";
-        return $this->fetch($sql, ['correo' => $correo]);
+        $sql = "SELECT * FROM {$this->table} WHERE LOWER(correo) = :correo LIMIT 1";
+        return $this->fetch($sql, ['correo' => $this->normalizeCorreo($correo)]);
     }
 
     /**
      * Verifica si un correo ya está registrado (opcionalmente excluyendo un ID de usuario).
      */
     public function existsByEmail(string $email, ?int $excludeUserId = null): bool {
+        $normalized = $this->normalizeCorreo($email);
+
         if ($excludeUserId !== null) {
             $sql = "SELECT 1 FROM {$this->table}
-                    WHERE correo = :correo AND id_usuario <> :id_usuario
+                    WHERE LOWER(correo) = :correo AND id_usuario <> :id_usuario
                     LIMIT 1";
 
             return $this->fetch($sql, [
-                'correo'     => $email,
+                'correo'     => $normalized,
                 'id_usuario' => $excludeUserId,
             ]) !== null;
         }
 
-        $sql = "SELECT 1 FROM {$this->table} WHERE correo = :correo LIMIT 1";
+        $sql = "SELECT 1 FROM {$this->table} WHERE LOWER(correo) = :correo LIMIT 1";
 
-        return $this->fetch($sql, ['correo' => $email]) !== null;
+        return $this->fetch($sql, ['correo' => $normalized]) !== null;
     }
 
     /**
      * Crea un nuevo usuario encriptando la contraseña en password_hash.
      */
     public function create(array $data): int|string|null {
+        if (isset($data['correo'])) {
+            $data['correo'] = $this->normalizeCorreo((string) $data['correo']);
+        }
+
         if (isset($data['password'])) {
             $data['password_hash'] = password_hash((string) $data['password'], PASSWORD_DEFAULT);
             unset($data['password']);
@@ -59,7 +65,7 @@ class User extends BaseModel {
     public function updateUser(int $userId, array $data): bool {
         $fields = [
             'nombre' => $data['nombre'],
-            'correo' => $data['correo'],
+            'correo' => $this->normalizeCorreo((string) $data['correo']),
         ];
 
         $plainPassword = $data['password'] ?? null;
@@ -98,5 +104,12 @@ class User extends BaseModel {
      */
     public function verifyPassword(string $password, string $hash): bool {
         return password_verify($password, $hash);
+    }
+
+    /**
+     * Normaliza un correo electrónico eliminando espacios y pasando a minúsculas.
+     */
+    private function normalizeCorreo(string $correo): string {
+        return mb_strtolower(trim($correo), 'UTF-8');
     }
 }

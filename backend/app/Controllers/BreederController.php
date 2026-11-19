@@ -104,7 +104,7 @@ class BreederController {
         $input = $this->getJsonInput();
 
         $name = is_string($input['nombre'] ?? null) ? trim($input['nombre']) : '';
-        $email = is_string($input['correo'] ?? null) ? trim($input['correo']) : '';
+        $email = is_string($input['correo'] ?? null) ? mb_strtolower(trim($input['correo']), 'UTF-8') : '';
         $password = is_string($input['password'] ?? null) ? trim($input['password']) : '';
         $rawMemberNumber = $input['numero_socio'] ?? null;
 
@@ -178,8 +178,8 @@ class BreederController {
             : (string) $existing['nombre'];
 
         $email = array_key_exists('correo', $input)
-            ? (is_string($input['correo']) ? trim($input['correo']) : '')
-            : (string) $existing['correo'];
+            ? (is_string($input['correo']) ? mb_strtolower(trim($input['correo']), 'UTF-8') : '')
+            : mb_strtolower(trim((string) $existing['correo']), 'UTF-8');
 
         $rawMemberNumber = array_key_exists('numero_socio', $input)
             ? $input['numero_socio']
@@ -287,20 +287,6 @@ class BreederController {
         }
 
         return $decoded;
-    }
-
-    /**
-     * Valida y normaliza numero_socio (1 a 5 dígitos numéricos, NOT NULL).
-     */
-    private function validateMemberNumber(mixed $value): string {
-        $error = $this->getMemberNumberError($value);
-        if ($error !== null) {
-            ResponseHelper::validationError([
-                'numero_socio' => $error,
-            ]);
-        }
-
-        return trim((string) $value);
     }
 
     /**

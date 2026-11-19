@@ -69,10 +69,10 @@ final class App{
         );
 
         $baseUrl = rtrim(self::environmentValue('APP_URL', 'http://localhost'), '/');
-        $rawJwtExpiration = self::environmentValue('JWT_EXPIRATION', '7200');
+        $rawJwtExpiration = self::environmentValue('JWT_EXPIRATION', '1800');
         $jwtExpiration = (is_numeric($rawJwtExpiration) && (int) $rawJwtExpiration > 0)
             ? (int) $rawJwtExpiration
-            : 7200;
+            : 1800;
 
         self::$configuration = [
             'name' => self::environmentValue('APP_NAME', 'CanariApp'),
