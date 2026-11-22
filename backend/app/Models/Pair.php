@@ -8,17 +8,17 @@ use PDOException;
 use RuntimeException;
 
 /**
- * Modelo para la tabla "pareja" según el esquema v7.1[cite: 3].
+ * Modelo para la tabla "pareja" según el esquema v7.1.
  *
  * Aplica el aislamiento por criadero mediante id_criador y traduce las
- * restricciones y triggers de la base de datos a códigos de dominio[cite: 3].
+ * restricciones y triggers de la base de datos a códigos de dominio.
  */
 class Pair extends BaseModel {
     protected string $table = 'pareja';
     protected string $primaryKey = 'id_pareja';
 
     /**
-     * Campos permitidos al crear una nueva pareja[cite: 3, 4].
+     * Campos permitidos al crear una nueva pareja.
      *
      * @var array<int, string>
      */
@@ -30,7 +30,7 @@ class Pair extends BaseModel {
     ];
 
     /**
-     * Campos permitidos al actualizar una pareja existente[cite: 3, 4].
+     * Campos permitidos al actualizar una pareja existente.
      *
      * @var array<int, string>
      */
@@ -48,7 +48,7 @@ class Pair extends BaseModel {
     private const ERROR_CONFLICT = 'conflict';
 
     /**
-     * Busca una pareja por su clave primaria junto con datos de jaula y progenitores[cite: 3, 4].
+     * Busca una pareja por su clave primaria junto con datos de jaula y progenitores.
      *
      * @return array<string, mixed>|null
      */
@@ -61,7 +61,7 @@ class Pair extends BaseModel {
     }
 
     /**
-     * Lista las parejas de un criador con filtros opcionales[cite: 3, 4].
+     * Lista las parejas de un criador con filtros opcionales.
      *
      * @param array<string, mixed> $filters
      * @return array<int, array<string, mixed>>
@@ -95,7 +95,7 @@ class Pair extends BaseModel {
     }
 
     /**
-     * Verifica si una pareja pertenece al criador indicado[cite: 3, 4].
+     * Verifica si una pareja pertenece al criador indicado.
      */
     public function belongsToBreeder(int $id_pareja, int $id_criador): bool {
         return $this->existsBy([
@@ -105,7 +105,7 @@ class Pair extends BaseModel {
     }
 
     /**
-     * Crea una nueva pareja para el criador indicado[cite: 3, 4].
+     * Crea una nueva pareja para el criador indicado.
      *
      * @param array<string, mixed> $data
      */
@@ -149,7 +149,7 @@ class Pair extends BaseModel {
     }
 
     /**
-     * Actualiza una pareja que pertenece al criador indicado[cite: 3, 4].
+     * Actualiza una pareja que pertenece al criador indicado.
      *
      * @param array<string, mixed> $data
      */
@@ -189,7 +189,7 @@ class Pair extends BaseModel {
                 return self::ERROR_INVALID_DATA;
             }
 
-            // Verifica que fecha_fin no sea anterior a fecha_formacion antes de consultar la BD[cite: 3].
+            // Verifica que fecha_fin no sea anterior a fecha_formacion antes de consultar la BD.
             if (isset($current['fecha_formacion']) && $payload['fecha_fin'] < (string) $current['fecha_formacion']) {
                 return self::ERROR_INVALID_DATA;
             }
@@ -212,7 +212,7 @@ class Pair extends BaseModel {
     }
 
     /**
-     * Consulta SELECT base uniendo la jaula y los anillos de ambos progenitores[cite: 3, 4].
+     * Consulta SELECT base uniendo la jaula y los anillos de ambos progenitores.
      */
     private function detailedSelect(): string {
         return 'SELECT p.id_pareja, p.id_criador, p.id_macho, p.id_hembra,
