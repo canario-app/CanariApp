@@ -18,6 +18,7 @@ class HomeController {
                 'health' => 'GET /api/health',
                 'v1'     => 'GET /api/v1',
                 'login'  => 'POST /api/login',
+                'wiki'   => 'GET /api/v1/wiki',
             ],
         ], 'Bienvenido a la API de CanariApp.');
     }
@@ -68,6 +69,14 @@ class HomeController {
                     'POST /api/v1/canarios',
                     'PUT /api/v1/canarios/{id}',
                     'PATCH /api/v1/canarios/{id}',
+                ],
+                'catalogs' => [
+                    'GET /api/v1/wiki',
+                    'GET /api/v1/wiki/clubes',
+                    'GET /api/v1/wiki/variedades',
+                    'GET /api/v1/wiki/variedades/codigo/{codigo}',
+                    'GET /api/v1/wiki/variedades/{id}',
+                    'GET /api/v1/wiki/mutaciones',
                 ],
             ],
         ], 'Índice de endpoints de CanariApp API v1.');

@@ -286,6 +286,48 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 | `requiere_revision` | booleano | No | No escribible: lo calcula la BD |
 | `fecha_registro` | fecha y hora | No | La asigna la BD |
 
+## Catálogos (wiki)
+
+Endpoints de **solo lectura** que exponen los catálogos oficiales necesarios para registrar ejemplares y usar el simulador. No son una wiki de cuidados o alimentación: ese contenido queda fuera de alcance según la sección 1.2 del SRS. Requieren Bearer como el resto de `/api/v1`.
+
+Traza: SRS-RF002 (siglas de club), SRS-RF007/RF008/RF009 (nomenclador y sexo de la variedad), SRS-RF011 (alta de clubes), SRS-RF025/RF027 (mutaciones). La carga administrativa de estos catálogos no está incluida aquí.
+
+| Método y ruta | Respuesta | Descripción |
+|---|---|---|
+| `GET /api/v1/wiki` | `data` con `clubes`, `variedades`, `mutaciones` | Paquete completo para inicializar los desplegables. |
+| `GET /api/v1/wiki/clubes` | lista de clubes | Siglas disponibles para el anillo. |
+| `GET /api/v1/wiki/variedades` | lista de variedades | Nomenclador completo; admite filtros. |
+| `GET /api/v1/wiki/variedades/codigo/{codigo}` | una variedad | Selección exacta por código (SRS-RF008). |
+| `GET /api/v1/wiki/variedades/{id}` | una variedad | Detalle por `id_variedad`. |
+| `GET /api/v1/wiki/mutaciones` | lista de mutaciones | Catálogo disponible en el simulador. |
+
+Filtros opcionales de `GET /variedades`:
+
+| Query param | Regla |
+|---|---|
+| `buscar` | Coincidencia parcial (ILIKE) en `codigo` o `nombre`; máximo 150 caracteres. |
+| `codigo` | Código exacto del nomenclador; máximo 10 caracteres. |
+| `tipo` | `CC` (color) o `CP` (forma y postura). |
+| `sexo` | `M` u `H` (también en minúsculas). Si no se envía, la BD lo deriva de MACHO/HEMBRA en el nombre; cualquier otro valor se ignora. |
+
+Errores propios: `400` ID o código inválido, `404` variedad inexistente, `422` filtro inválido (`tipo`, `codigo`, `buscar`). No se aceptan `POST`, `PUT`, `PATCH` ni `DELETE` en estas rutas.
+
+Ejemplos de objetos devueltos:
+
+```json
+{ "id_club": 4, "sigla": "SOCH" }
+```
+
+```json
+{ "id_variedad": 2, "codigo": "D.007", "nombre": "AMARILLO MOSAICO MACHO", "tipo": "CC", "serie": null, "sexo": "M" }
+```
+
+```json
+{ "id_mutacion": 1, "nombre": "Ágata", "tipo_herencia": "ligada al sexo recesiva" }
+```
+
+`variedad.sexo` y `mutacion.tipo_herencia` los fija la BD (`CHAR(1)` derivado y `CHECK` de dos valores respectivamente). El cliente solo los lee en la respuesta; `sexo` además puede usarse como filtro.
+
 ## Códigos de dominio del backend
 
 | Código del modelo | Respuesta HTTP | Significado |
@@ -304,6 +346,7 @@ El mensaje de conflicto de anillo es genérico: no revela en qué criadero está
 ## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
+- Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
 - Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
 
 Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
