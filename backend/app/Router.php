@@ -63,14 +63,14 @@ final class Router {
 
         $this->router->delete('/api/v1/admin/criadores/(\d+)', BreederController::class . '@destroy');
 
-        // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)[cite: 3, 4]
+        // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
         $this->router->get('/api/v1/canarios/(\d+)', CanaryController::class . '@show');
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
 
-        // Parejas y jaulas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)[cite: 3, 4]
+        // Parejas y jaulas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)
         $this->router->get('/api/v1/parejas', PairController::class . '@index');
         $this->router->get('/api/v1/parejas/(\d+)', PairController::class . '@show');
         $this->router->post('/api/v1/parejas', PairController::class . '@store');
