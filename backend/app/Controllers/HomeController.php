@@ -8,7 +8,7 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 
 class HomeController {
     /**
-     * Punto de entrada raíz de la API[cite: 6].
+     * Punto de entrada raíz de la API.
      */
     public function index(): void {
         ResponseHelper::success([
@@ -23,7 +23,7 @@ class HomeController {
     }
 
     /**
-     * Verifica el estado operativo del servicio[cite: 6].
+     * Verifica el estado operativo del servicio.
      */
     public function health(): void {
         ResponseHelper::success([
@@ -34,7 +34,7 @@ class HomeController {
     }
 
     /**
-     * Devuelve el índice general de endpoints disponibles en la versión 1[cite: 6].
+     * Devuelve el índice general de endpoints disponibles en la versión  .
      */
     public function v1(): void {
         ResponseHelper::success([
