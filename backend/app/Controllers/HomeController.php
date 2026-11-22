@@ -69,6 +69,11 @@ class HomeController {
                     'PUT /api/v1/canarios/{id}',
                     'PATCH /api/v1/canarios/{id}',
                 ],
+                'cages' => [
+                    'GET /api/v1/jaulas',
+                    'GET /api/v1/jaulas/{id}',
+                    'POST /api/v1/jaulas',
+                ],
             ],
         ], 'Índice de endpoints de CanariApp API v1.');
     }
