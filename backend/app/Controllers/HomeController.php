@@ -74,14 +74,20 @@ class HomeController {
                     'GET /api/v1/jaulas',
                     'GET /api/v1/jaulas/{id}',
                     'POST /api/v1/jaulas',
-
+                ],
                 'pairs' => [
                     'GET /api/v1/parejas',
                     'GET /api/v1/parejas/{id}',
                     'POST /api/v1/parejas',
                     'PUT /api/v1/parejas/{id}',
                     'PATCH /api/v1/parejas/{id}',
-                  
+                ],
+                'matings' => [
+                    'GET /api/v1/cruces',
+                    'GET /api/v1/cruces/pareja/{id}',
+                    'GET /api/v1/cruces/{id}',
+                    'POST /api/v1/cruces',
+                ],
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',

@@ -40,7 +40,7 @@ class Pair extends BaseModel {
         'fecha_fin',
     ];
 
-    private const ALLOWED_STATES = ['activa', 'finalizada', 'anulada'];[cite: 3]
+    private const ALLOWED_STATES = ['activa', 'finalizada', 'anulada'];
 
     private const ERROR_INVALID_DATA = 'invalid_data';
     private const ERROR_INVALID_REFERENCE = 'invalid_reference';
@@ -132,8 +132,8 @@ class Pair extends BaseModel {
         }
 
         $payload['id_criador'] = $id_criador;
-        $payload['estado'] = 'activa';[cite: 3, 4]
-        $payload['fecha_fin'] = null;[cite: 3]
+        $payload['estado'] = 'activa';
+        $payload['fecha_fin'] = null;
 
         try {
             $id = $this->insert($payload);
