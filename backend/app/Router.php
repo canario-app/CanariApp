@@ -9,6 +9,7 @@ use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\HomeController;
+use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 
@@ -57,17 +58,24 @@ final class Router {
 
         $this->router->post('/api/v1/admin/register', AuthController::class . '@register');
         $this->router->post('/api/v1/admin/criadores', BreederController::class . '@store');
-        
+
         $this->router->put('/api/v1/admin/criadores/(\d+)', BreederController::class . '@update');
-        
+
         $this->router->delete('/api/v1/admin/criadores/(\d+)', BreederController::class . '@destroy');
 
-        // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
+        // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)[cite: 3, 4]
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
         $this->router->get('/api/v1/canarios/(\d+)', CanaryController::class . '@show');
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+
+        // Parejas y jaulas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)[cite: 3, 4]
+        $this->router->get('/api/v1/parejas', PairController::class . '@index');
+        $this->router->get('/api/v1/parejas/(\d+)', PairController::class . '@show');
+        $this->router->post('/api/v1/parejas', PairController::class . '@store');
+        $this->router->put('/api/v1/parejas/(\d+)', PairController::class . '@update');
+        $this->router->patch('/api/v1/parejas/(\d+)', PairController::class . '@update');
 
         // --- 404 ---
         $this->router->set404(function (): void {
