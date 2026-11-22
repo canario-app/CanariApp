@@ -8,6 +8,7 @@ use Bramus\Router\Router as BramusRouter;
 use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CanaryController;
+use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
@@ -68,6 +69,11 @@ final class Router {
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+        
+        // Jaulas: solo el criador autenticado, dentro de su propio criadero.
+        $this->router->get('/api/v1/jaulas', CageController::class . '@index');
+        $this->router->get('/api/v1/jaulas/(\d+)', CageController::class . '@show');
+        $this->router->post('/api/v1/jaulas', CageController::class . '@store');
 
         // --- 404 ---
         $this->router->set404(function (): void {
