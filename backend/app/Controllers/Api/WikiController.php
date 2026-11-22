@@ -104,12 +104,14 @@ class WikiController {
             }
         }
 
-        $sexo = $this->boundedText('sexo', 1, $errors, 'El sexo debe ser "M" o "H".');
-        if ($sexo !== null) {
+        // El sexo de la variedad lo deriva la BD desde MACHO/HEMBRA en el nombre.
+        // Como filtro se acepta M/H (o m/h); cualquier otro valor se ignora,
+        // no genera un 422.
+        $sexo = Sanitizer::string($_GET['sexo'] ?? null, 1);
+        if ($sexo !== null && $sexo !== '') {
+            $sexo = strtoupper($sexo);
             if (in_array($sexo, ['M', 'H'], true)) {
                 $filters['sexo'] = $sexo;
-            } else {
-                $errors['sexo'] = 'El sexo debe ser "M" o "H".';
             }
         }
 

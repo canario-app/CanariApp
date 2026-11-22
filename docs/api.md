@@ -308,9 +308,9 @@ Filtros opcionales de `GET /variedades`:
 | `buscar` | Coincidencia parcial (ILIKE) en `codigo` o `nombre`; máximo 150 caracteres. |
 | `codigo` | Código exacto del nomenclador; máximo 10 caracteres. |
 | `tipo` | `CC` (color) o `CP` (forma y postura). |
-| `sexo` | `M` u `H`. Viene de `variedad.sexo`, calculado por la BD desde MACHO/HEMBRA en el nombre. |
+| `sexo` | `M` u `H` (también en minúsculas). Si no se envía, la BD lo deriva de MACHO/HEMBRA en el nombre; cualquier otro valor se ignora. |
 
-Errores propios: `400` ID o código inválido, `404` variedad inexistente, `422` filtro inválido (`tipo`, `sexo`, `codigo`, `buscar`). No se aceptan `POST`, `PUT`, `PATCH` ni `DELETE` en estas rutas.
+Errores propios: `400` ID o código inválido, `404` variedad inexistente, `422` filtro inválido (`tipo`, `codigo`, `buscar`). No se aceptan `POST`, `PUT`, `PATCH` ni `DELETE` en estas rutas.
 
 Ejemplos de objetos devueltos:
 
@@ -326,7 +326,7 @@ Ejemplos de objetos devueltos:
 { "id_mutacion": 1, "nombre": "Ágata", "tipo_herencia": "ligada al sexo recesiva" }
 ```
 
-`variedad.sexo` y `mutacion.tipo_herencia` los fija la BD (`CHAR(1)` derivado y `CHECK` de dos valores respectivamente). El cliente solo los lee.
+`variedad.sexo` y `mutacion.tipo_herencia` los fija la BD (`CHAR(1)` derivado y `CHECK` de dos valores respectivamente). El cliente solo los lee en la respuesta; `sexo` además puede usarse como filtro.
 
 ## Códigos de dominio del backend
 
