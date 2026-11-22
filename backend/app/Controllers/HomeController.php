@@ -18,6 +18,7 @@ class HomeController {
                 'health' => 'GET /api/health',
                 'v1'     => 'GET /api/v1',
                 'login'  => 'POST /api/login',
+                'wiki'   => 'GET /api/v1/wiki',
             ],
         ], 'Bienvenido a la API de CanariApp.');
     }
@@ -34,7 +35,7 @@ class HomeController {
     }
 
     /**
-     * Devuelve el índice general de endpoints disponibles en la versión 1.
+     * Devuelve el índice general de endpoints disponibles en la versión  .
      */
     public function v1(): void {
         ResponseHelper::success([
@@ -73,6 +74,21 @@ class HomeController {
                     'GET /api/v1/jaulas',
                     'GET /api/v1/jaulas/{id}',
                     'POST /api/v1/jaulas',
+
+                'pairs' => [
+                    'GET /api/v1/parejas',
+                    'GET /api/v1/parejas/{id}',
+                    'POST /api/v1/parejas',
+                    'PUT /api/v1/parejas/{id}',
+                    'PATCH /api/v1/parejas/{id}',
+                  
+                'catalogs' => [
+                    'GET /api/v1/wiki',
+                    'GET /api/v1/wiki/clubes',
+                    'GET /api/v1/wiki/variedades',
+                    'GET /api/v1/wiki/variedades/codigo/{codigo}',
+                    'GET /api/v1/wiki/variedades/{id}',
+                    'GET /api/v1/wiki/mutaciones',
                 ],
             ],
         ], 'Índice de endpoints de CanariApp API v1.');

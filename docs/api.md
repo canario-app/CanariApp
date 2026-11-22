@@ -263,6 +263,89 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 
 **No existe.** El SRS 1.2 excluye la eliminación de registros y la BD v7.1 no concede `DELETE` al rol de la aplicación. No se documenta ni se registra la ruta.
 
+## Pareja
+
+Cada pareja asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo criadero con una jaula (`id_jaula`) del mismo criadero. Toda pareja nace en estado `activa` con `fecha_fin = null`; un macho admite hasta 6 parejas activas, mientras que una hembra y una jaula admiten solo una pareja activa a la vez.
+
+`id_pareja` e `id_criador` **no** se aceptan en el cuerpo (el criadero se toma del usuario autenticado). Al crear una pareja tampoco se envían `estado` ni `fecha_fin`.
+
+### Objeto `pareja`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_pareja` | entero | `pareja.id_pareja` |
+| `id_criador` | entero | `pareja.id_criador` |
+| `id_macho` | entero | `pareja.id_macho` |
+| `anillo_macho` | texto | `canario.anillo` (macho) |
+| `id_hembra` | entero | `pareja.id_hembra` |
+| `anillo_hembra` | texto | `canario.anillo` (hembra) |
+| `id_jaula` | entero | `pareja.id_jaula` |
+| `numero_jaula` | entero | `jaula.numero_jaula` |
+| `fecha_formacion` | fecha (`YYYY-MM-DD`) | `pareja.fecha_formacion` |
+| `estado` | `"activa"`, `"finalizada"` o `"anulada"` | `pareja.estado` |
+| `fecha_fin` | fecha (`YYYY-MM-DD`) o `null` | `pareja.fecha_fin` |
+
+### 1. Listar parejas
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/parejas` |
+| Quién puede usarla | Criador autenticado (solo las parejas de su criadero) |
+| Campos, tipos y obligatoriedad | Sin cuerpo. Filtros opcionales por query string: `estado`, `id_macho`, `id_hembra`, `id_jaula` |
+| Ejemplo de petición | `GET /api/v1/parejas?estado=activa` |
+| Ejemplo de respuesta | `200` con `data` = lista de objetos `pareja` |
+| Errores esperados | `401`, `403` rol distinto a criador, `404` sin perfil de criador asociado, `500` |
+| Reglas de validación | Filtra estrictamente por el `id_criador` del usuario autenticado; filtros vacíos o inválidos se ignoran |
+
+### 2. Ver detalle de una pareja
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/parejas/{id}` |
+| Quién puede usarla | Criador dueño de la pareja |
+| Campos, tipos y obligatoriedad | `{id}` entero positivo (`id_pareja`) |
+| Ejemplo de petición | `GET /api/v1/parejas/3` |
+| Ejemplo de respuesta | `200` con `data` = objeto `pareja` |
+| Errores esperados | `400` ID inválido, `401`, `403` pareja ajena o rol distinto a criador, `404` pareja o perfil inexistente, `500` |
+| Reglas de validación | Un criador no puede consultar parejas pertenecientes a otro criadero |
+
+### 3. Crear pareja
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/parejas` |
+| Quién puede usarla | Criador autenticado |
+| Campos, tipos y obligatoriedad | Obligatorios: `id_macho`, `id_hembra`, `id_jaula`. Opcional: `fecha_formacion` (`YYYY-MM-DD`, por defecto fecha actual) |
+| Ejemplo de petición | Ver bloque siguiente |
+| Ejemplo de respuesta | `201` con `data` = objeto `pareja` creado en estado `"activa"` |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `409` máximo 6 parejas activas por macho, hembra con pareja activa o jaula ocupada, `422` validación o referencia ajena/inexistente, `500` |
+| Reglas de validación | Macho (`M`) y hembra (`H`) deben ser distintos, pertenecer al criador y coincidir en criadero con la jaula; `fecha_formacion` no puede ser posterior a la fecha actual |
+
+```json
+{
+  "id_macho": 10,
+  "id_hembra": 14,
+  "id_jaula": 2,
+  "fecha_formacion": "2026-11-22"
+}
+```
+
+### 4. Actualizar pareja
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `PUT` o `PATCH /api/v1/parejas/{id}` |
+| Quién puede usarla | Criador dueño de la pareja |
+| Campos, tipos y obligatoriedad | `{id}` entero positivo (`id_pareja`). Opcionales en cuerpo: `id_jaula`, `estado`, `fecha_fin` |
+| Ejemplo de petición | `PATCH /api/v1/parejas/3` con `{"estado": "finalizada"}` |
+| Ejemplo de respuesta | `200` con `data` = objeto `pareja` actualizado |
+| Errores esperados | `400` ID o JSON inválido, `401`, `403`, `404`, `409` jaula ocupada o restricción de ciclo de vida en BD, `422` validación o referencia inválida, `500` |
+| Reglas de validación | `id_criador`, `id_macho` e `id_hembra` no se modifican por este endpoint. Al pasar a `"finalizada"` o `"anulada"` se libera la jaula y se exige `fecha_fin >= fecha_formacion` (si no se envía `fecha_fin`, se asigna la fecha actual). Una pareja cerrada no puede volver a cambiar de estado y una pareja con cruces no puede anularse |
+
+### 5. Eliminar pareja
+
+**No existe.** El SRS 1.2 excluye la eliminación física de registros; las parejas se finalizan o anulan según las reglas del ciclo de vida y la BD v7.1.
+
 ## Campos y validaciones
 
 ### Usuario y criador
@@ -275,6 +358,7 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 | `numero_socio` | texto | Sí (al crear criador) | 1–5 dígitos numéricos; único entre criadores y no editable desde `/criador/perfil` |
 
 ### Canario
+
 | Campo | Tipo | Obligatorio | Regla |
 |---|---|---|---|
 | `anillo` | texto | Sí (al crear) | 1–6 dígitos; único en el sistema junto con club, socio y temporada |
@@ -286,17 +370,71 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 | `requiere_revision` | booleano | No | No escribible: lo calcula la BD |
 | `fecha_registro` | fecha y hora | No | La asigna la BD |
 
+### Pareja
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `id_macho` | entero | Sí (al crear) | Entero positivo; ejemplar con `sexo = 'M'` del mismo criadero; máximo 6 parejas activas |
+| `id_hembra` | entero | Sí (al crear) | Entero positivo; ejemplar con `sexo = 'H'` del mismo criadero; distinto de `id_macho`; máximo 1 pareja activa |
+| `id_jaula` | entero | Sí (al crear) | Entero positivo; jaula del mismo criadero; máximo 1 pareja activa |
+| `fecha_formacion` | fecha | No | Formato `YYYY-MM-DD`; menor o igual a la fecha actual (por defecto hoy) |
+| `estado` | texto | No | `"activa"` (al crear), `"finalizada"` o `"anulada"` (al cerrar) |
+| `fecha_fin` | fecha | No | Formato `YYYY-MM-DD`; `null` mientras esté `"activa"`, obligatoria y `>= fecha_formacion` al cerrar |
+
+## Catálogos (wiki)
+
+Endpoints de **solo lectura** que exponen los catálogos oficiales necesarios para registrar ejemplares y usar el simulador. No son una wiki de cuidados o alimentación: ese contenido queda fuera de alcance según la sección 1.2 del SRS. Requieren Bearer como el resto de `/api/v1`.
+
+Traza: SRS-RF002 (siglas de club), SRS-RF007/RF008/RF009 (nomenclador y sexo de la variedad), SRS-RF011 (alta de clubes), SRS-RF025/RF027 (mutaciones). La carga administrativa de estos catálogos no está incluida aquí.
+
+| Método y ruta | Respuesta | Descripción |
+|---|---|---|
+| `GET /api/v1/wiki` | `data` con `clubes`, `variedades`, `mutaciones` | Paquete completo para inicializar los desplegables. |
+| `GET /api/v1/wiki/clubes` | lista de clubes | Siglas disponibles para el anillo. |
+| `GET /api/v1/wiki/variedades` | lista de variedades | Nomenclador completo; admite filtros. |
+| `GET /api/v1/wiki/variedades/codigo/{codigo}` | una variedad | Selección exacta por código (SRS-RF008). |
+| `GET /api/v1/wiki/variedades/{id}` | una variedad | Detalle por `id_variedad`. |
+| `GET /api/v1/wiki/mutaciones` | lista de mutaciones | Catálogo disponible en el simulador. |
+
+Filtros opcionales de `GET /variedades`:
+
+| Query param | Regla |
+|---|---|
+| `buscar` | Coincidencia parcial (ILIKE) en `codigo` o `nombre`; máximo 150 caracteres. |
+| `codigo` | Código exacto del nomenclador; máximo 10 caracteres. |
+| `tipo` | `CC` (color) o `CP` (forma y postura). |
+| `sexo` | `M` u `H` (también en minúsculas). Si no se envía, la BD lo deriva de MACHO/HEMBRA en el nombre; cualquier otro valor se ignora. |
+
+Errores propios: `400` ID o código inválido, `404` variedad inexistente, `422` filtro inválido (`tipo`, `codigo`, `buscar`). No se aceptan `POST`, `PUT`, `PATCH` ni `DELETE` en estas rutas.
+
+Ejemplos de objetos devueltos:
+
+```json
+{ "id_club": 4, "sigla": "SOCH" }
+```
+
+```json
+{ "id_variedad": 2, "codigo": "D.007", "nombre": "AMARILLO MOSAICO MACHO", "tipo": "CC", "serie": null, "sexo": "M" }
+```
+
+```json
+{ "id_mutacion": 1, "nombre": "Ágata", "tipo_herencia": "ligada al sexo recesiva" }
+```
+
+`variedad.sexo` y `mutacion.tipo_herencia` los fija la BD (`CHAR(1)` derivado y `CHECK` de dos valores respectivamente). El cliente solo los lee en la respuesta; `sexo` además puede usarse como filtro.
+
+
 ## Códigos de dominio del backend
 
 | Código del modelo | Respuesta HTTP | Significado |
 |---|---|---|
 | `conflict_anillo` | `409` | El anillo completo ya existe en cualquier criadero |
 | `invalid_data` | `422` | Formato inválido o una regla de la BD rechazó el registro |
-| `invalid_reference` | `422` | Club, variedad o criador inexistente |
-| `not_found` | `404` | Canario inexistente o que no pertenece al criador |
+| `invalid_reference` | `422` | Club, variedad, ejemplar, jaula o criador inexistente o de otro criadero |
+| `not_found` | `404` | Recurso inexistente o que no pertenece al criador |
 | `conflict_email` | `409` | El correo electrónico ya está registrado en `usuario` |
 | `conflict_member_number` | `409` | El número de socio ya está registrado por otro criador |
-| `conflict` | `409` | El criador tiene registros o historial de auditoría asociado (`SQLSTATE 23503`) |
+| `conflict` | `409` | Restricción de negocio o integridad referencial (`SQLSTATE 23503`, `23505` o trigger `P0001`) |
 | `forbidden` | `403` | Política de permisos de BD impide la operación (`SQLSTATE 42501`) o recurso ajeno |
 
 El mensaje de conflicto de anillo es genérico: no revela en qué criadero está registrado ni quién es su dueño (SRS-RF003).
@@ -359,6 +497,9 @@ No se implementan `PUT`, `PATCH` ni `DELETE` para jaulas. La versión 1.2 del SR
 ## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
+- Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior y que se incorporaron los endpoints de `pareja` (`/api/v1/parejas`).
+
+- Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
 - Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
 
 Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
