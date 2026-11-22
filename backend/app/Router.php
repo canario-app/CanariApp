@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CanariApp\Backend;
 
 use Bramus\Router\Router as BramusRouter;
+use CanariApp\Backend\Controllers\Api\WikiController;
 use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CanaryController;
@@ -68,6 +69,14 @@ final class Router {
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+
+        // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
+        $this->router->get('/api/v1/wiki', WikiController::class . '@index');
+        $this->router->get('/api/v1/wiki/clubes', WikiController::class . '@clubes');
+        $this->router->get('/api/v1/wiki/variedades', WikiController::class . '@variedades');
+        $this->router->get('/api/v1/wiki/variedades/codigo/([^/]+)', WikiController::class . '@variedadPorCodigo');
+        $this->router->get('/api/v1/wiki/variedades/(\d+)', WikiController::class . '@variedad');
+        $this->router->get('/api/v1/wiki/mutaciones', WikiController::class . '@mutaciones');
 
         // --- 404 ---
         $this->router->set404(function (): void {
