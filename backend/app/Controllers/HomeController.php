@@ -70,6 +70,11 @@ class HomeController {
                     'PUT /api/v1/canarios/{id}',
                     'PATCH /api/v1/canarios/{id}',
                 ],
+                'cages' => [
+                    'GET /api/v1/jaulas',
+                    'GET /api/v1/jaulas/{id}',
+                    'POST /api/v1/jaulas',
+
                 'pairs' => [
                     'GET /api/v1/parejas',
                     'GET /api/v1/parejas/{id}',

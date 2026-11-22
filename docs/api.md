@@ -439,6 +439,61 @@ Ejemplos de objetos devueltos:
 
 El mensaje de conflicto de anillo es genérico: no revela en qué criadero está registrado ni quién es su dueño (SRS-RF003).
 
+## Gestión de jaulas
+
+La gestión de jaulas está disponible para el usuario autenticado con rol `criador` y queda limitada a su propio criadero (StRS-004, SEG-001). La tabla `jaula` de la BD v7.1 contiene `id_jaula` (generado por la BD), `numero_jaula` e `id_criador`.
+
+### Objeto `jaula`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_jaula` | entero | `jaula.id_jaula` |
+| `numero_jaula` | entero | `jaula.numero_jaula` |
+| `id_criador` | entero | `jaula.id_criador`, tomado del usuario autenticado |
+| `ocupada` | booleano | Calculado: existe una pareja con `estado = 'activa'` asignada a esa jaula |
+
+`ocupada` no es una columna de la base de datos; se calcula al consultar. Una jaula se considera ocupada mientras tenga una pareja activa. Al finalizar o anular la pareja, queda disponible (SRS-RF017 y SRS-RF031).
+
+### 1. Listar jaulas
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/jaulas` |
+| Quién puede usarla | Criador autenticado (solo las jaulas de su criadero) |
+| Campos, tipos y obligatoriedad | Sin cuerpo |
+| Ejemplo de petición | `GET /api/v1/jaulas` |
+| Ejemplo de respuesta | `200` con `data` = lista de objetos `jaula`, ordenados por `numero_jaula` |
+| Errores esperados | `401`, `403`, `500` |
+| Reglas de validación | No se aceptan filtros de `id_criador` enviados por el cliente |
+
+### 2. Ver detalle de una jaula
+
+| Campo o decisión | Valor |
+|---|---|
+| Método y ruta | `GET /api/v1/jaulas/{id}` |
+| Quién puede usarla | Criador dueño de la jaula |
+| Campos, tipos y obligatoriedad | `{id}` entero positivo (`id_jaula`) |
+| Ejemplo de petición | `GET /api/v1/jaulas/3` |
+| Ejemplo de respuesta | `200` con `data` = objeto `jaula` |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404` jaula inexistente o de otro criadero |
+| Reglas de validación | La consulta siempre filtra por `id_jaula` e `id_criador` del usuario autenticado |
+
+### 3. Registrar jaula
+
+| Campo o decisión | Valor |
+|---|---|
+| Método y ruta | `POST /api/v1/jaulas` |
+| Quién puede usarla | Criador autenticado |
+| Campos, tipos y obligatoriedad | Obligatorio: `numero_jaula` (entero entre 1 y 2.147.483.647) |
+| Ejemplo de petición | `{"numero_jaula": 3}` |
+| Ejemplo de respuesta | `201` con `data` = objeto `jaula` creado |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `409` número ya registrado en el criadero, `422` número inválido o restricción de BD, `500` |
+| Reglas de validación | `id_jaula` lo genera la BD e `id_criador` se obtiene del token; no se aceptan en el cuerpo. El número debe ser positivo y único dentro del criadero (`uq_jaula_criador`). |
+
+### Alcance de esta versión
+
+No se implementan `PUT`, `PATCH` ni `DELETE` para jaulas. La versión 1.2 del SRS excluye la edición y eliminación general de registros; además, la base de datos hace inmutable `id_criador` en `jaula`. La ocupación se libera mediante el ciclo de vida de la pareja, no eliminando la jaula: una pareja se crea activa y al finalizarse libera su jaula (SRS-RF017).
+
 ## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.

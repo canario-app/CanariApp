@@ -9,6 +9,7 @@ use CanariApp\Backend\Controllers\Api\WikiController;
 use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CanaryController;
+use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Helpers\ResponseHelper;
@@ -70,6 +71,11 @@ final class Router {
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+        
+        // Jaulas: solo el criador autenticado, dentro de su propio criadero.
+        $this->router->get('/api/v1/jaulas', CageController::class . '@index');
+        $this->router->get('/api/v1/jaulas/(\d+)', CageController::class . '@show');
+        $this->router->post('/api/v1/jaulas', CageController::class . '@store');
 
         // Parejas y jaulas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)
         $this->router->get('/api/v1/parejas', PairController::class . '@index');
