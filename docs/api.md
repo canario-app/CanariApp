@@ -301,14 +301,6 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 
 El mensaje de conflicto de anillo es genérico: no revela en qué criadero está registrado ni quién es su dueño (SRS-RF003).
 
-## Pendiente de coordinar
-
-- Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
-- Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
-
-Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
-
-
 ## Gestión de jaulas
 
 La gestión de jaulas está disponible para el usuario autenticado con rol `criador` y queda limitada a su propio criadero (StRS-004, SEG-001). La tabla `jaula` de la BD v7.1 contiene `id_jaula` (generado por la BD), `numero_jaula` e `id_criador`.
@@ -363,6 +355,8 @@ La gestión de jaulas está disponible para el usuario autenticado con rol `cria
 ### Alcance de esta versión
 
 No se implementan `PUT`, `PATCH` ni `DELETE` para jaulas. La versión 1.2 del SRS excluye la edición y eliminación general de registros; además, la base de datos hace inmutable `id_criador` en `jaula`. La ocupación se libera mediante el ciclo de vida de la pareja, no eliminando la jaula: una pareja se crea activa y al finalizarse libera su jaula (SRS-RF017).
+
+## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
 - Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
