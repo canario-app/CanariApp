@@ -11,6 +11,7 @@ use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\HomeController;
+use CanariApp\Backend\Controllers\MatingController;
 use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
@@ -83,7 +84,13 @@ final class Router {
         $this->router->post('/api/v1/parejas', PairController::class . '@store');
         $this->router->put('/api/v1/parejas/(\d+)', PairController::class . '@update');
         $this->router->patch('/api/v1/parejas/(\d+)', PairController::class . '@update');
-      
+
+        // Cruces: una pareja puede tener varios; sin edición ni borrado (SRS-RF016, SQL-01)
+        $this->router->get('/api/v1/cruces', MatingController::class . '@index');
+        $this->router->get('/api/v1/cruces/pareja/(\d+)', MatingController::class . '@byPair');
+        $this->router->get('/api/v1/cruces/(\d+)', MatingController::class . '@show');
+        $this->router->post('/api/v1/cruces', MatingController::class . '@store');
+
         // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
         $this->router->get('/api/v1/wiki', WikiController::class . '@index');
         $this->router->get('/api/v1/wiki/clubes', WikiController::class . '@clubes');

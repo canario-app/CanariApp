@@ -224,7 +224,7 @@ class PairController {
         match ($code) {
             'not_found'         => ResponseHelper::notFound('Pareja no encontrada.'),
             'invalid_reference' => ResponseHelper::validationError(['referencia' => 'El ejemplar o la jaula no existen o no pertenecen a tu criadero.'], 'Referencia inválida.'),
-            'conflict'          => ResponseHelper::conflict('Conflicto con las reglas de pareja o jaula activa (máximo 6 parejas activas por macho, 1 activa por hembra, 1 activa por jaula, o restricción de estado/cruces).'),[cite: 3, 4]
+            'conflict'          => ResponseHelper::conflict('Conflicto con las reglas de pareja o jaula activa (máximo 6 parejas activas por macho, 1 activa por hembra, 1 activa por jaula, o restricción de estado/cruces).'),
             default             => ResponseHelper::validationError(['datos' => 'Los datos o fechas de la pareja no son válidos.'], 'Error de validación.'),
         };
     }

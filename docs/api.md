@@ -346,6 +346,77 @@ Cada pareja asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo
 
 **No existe.** El SRS 1.2 excluye la eliminación física de registros; las parejas se finalizan o anulan según las reglas del ciclo de vida y la BD v7.1.
 
+## Cruces
+
+Un cruce es el apareamiento fechado de una pareja. Según SRS-RF016 una pareja puede tener **varios cruces**, siempre que esté `activa`. La fecha es obligatoria, se expresa como `YYYY-MM-DD` y no puede ser posterior a la fecha actual. El vínculo con la pareja es inmutable (revisión SQL-01), por lo que no hay `PUT`, `PATCH` ni `DELETE`.
+
+`id_cruce` e `id_criador` **no** se aceptan en el cuerpo. El criadero se toma de la pareja, que debe pertenecer al usuario autenticado.
+
+### Objeto `cruce`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_cruce` | entero | `cruce.id_cruce` |
+| `id_pareja` | entero | `cruce.id_pareja` |
+| `fecha_cruce` | fecha (`YYYY-MM-DD`) | `cruce.fecha_cruce` |
+| `id_criador` | entero | `pareja.id_criador` |
+| `id_macho` | entero | `pareja.id_macho` |
+| `anillo_macho` | texto | `canario.anillo` (macho) |
+| `id_hembra` | entero | `pareja.id_hembra` |
+| `anillo_hembra` | texto | `canario.anillo` (hembra) |
+
+### 1. Listar cruces
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/cruces` |
+| Quién puede usarla | Criador autenticado (solo los cruces de su criadero) |
+| Campos, tipos y obligatoriedad | Sin cuerpo. Filtros opcionales: `id_pareja`, `fecha_cruce` |
+| Ejemplo de petición | `GET /api/v1/cruces?id_pareja=3&fecha_cruce=2026-11-22` |
+| Ejemplo de respuesta | `200` con `data` = lista de objetos `cruce`, ordenados por fecha y ID descendente |
+| Errores esperados | `401`, `403`, `404` perfil de criador inexistente, `500` |
+| Reglas de validación | Filtros inválidos se ignoran; no se acepta `id_criador` enviado por el cliente |
+
+### 2. Listar cruces de una pareja
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/cruces/pareja/{id}` |
+| Quién puede usarla | Criador dueño de la pareja |
+| Campos, tipos y obligatoriedad | `{id}` entero positivo (`id_pareja`) |
+| Ejemplo de petición | `GET /api/v1/cruces/pareja/3` |
+| Ejemplo de respuesta | `200` con `data` = lista de objetos `cruce` de esa pareja |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404` perfil de criador inexistente, `500` |
+| Reglas de validación | Devuelve lista vacía si la pareja no existe, es ajena o aún no tiene cruces |
+
+### 3. Ver detalle de un cruce
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/cruces/{id}` |
+| Quién puede usarla | Criador dueño del cruce |
+| Campos, tipos y obligatoriedad | `{id}` entero positivo (`id_cruce`) |
+| Ejemplo de petición | `GET /api/v1/cruces/7` |
+| Ejemplo de respuesta | `200` con `data` = objeto `cruce` |
+| Errores esperados | `400` ID inválido, `401`, `403` cruce ajeno, `404` inexistente, `500` |
+| Reglas de validación | La consulta filtra por `id_criador` de la pareja asociada |
+
+### 4. Registrar cruce
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/cruces` |
+| Quién puede usarla | Criador autenticado |
+| Campos, tipos y obligatoriedad | Obligatorios: `id_pareja` (entero positivo), `fecha_cruce` (`YYYY-MM-DD`) |
+| Ejemplo de petición | `{"id_pareja": 3, "fecha_cruce": "2026-11-22"}` |
+| Ejemplo de respuesta | `201` con `data` = objeto `cruce` creado |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `404` pareja no encontrada en el criadero, `409` pareja no activa o restricción de BD, `422` validación, `500` |
+| Reglas de validación | Solo se registran cruces en parejas activas; la fecha no puede estar vacía ni ser futura; una pareja admite varios cruces |
+
+### 5. Editar o eliminar cruce
+
+**No existe.** El SRS 1.2 excluye la edición y eliminación general de registros, y la BD v7.1 hace inmutable `cruce.id_pareja` (SQL-01). Para corregir un progenitor se reasigna la pareja (SRS-RF031), no el cruce.
+
 ## Campos y validaciones
 
 ### Usuario y criador
@@ -380,6 +451,15 @@ Cada pareja asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo
 | `fecha_formacion` | fecha | No | Formato `YYYY-MM-DD`; menor o igual a la fecha actual (por defecto hoy) |
 | `estado` | texto | No | `"activa"` (al crear), `"finalizada"` o `"anulada"` (al cerrar) |
 | `fecha_fin` | fecha | No | Formato `YYYY-MM-DD`; `null` mientras esté `"activa"`, obligatoria y `>= fecha_formacion` al cerrar |
+
+### Cruce
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `id_pareja` | entero | Sí (al crear) | Entero positivo; pareja `activa` del criadero autenticado |
+| `fecha_cruce` | fecha | Sí (al crear) | Formato `YYYY-MM-DD`; no puede ser posterior a la fecha actual |
+| `id_cruce` | entero | No | No escribible: lo genera la BD |
+| `id_criador` | entero | No | No escribible: se toma de la pareja |
 
 ## Catálogos (wiki)
 
@@ -497,7 +577,7 @@ No se implementan `PUT`, `PATCH` ni `DELETE` para jaulas. La versión 1.2 del SR
 ## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
-- Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior y que se incorporaron los endpoints de `pareja` (`/api/v1/parejas`).
+- Avisar a Frontend que se incorporaron los endpoints de `pareja` (`/api/v1/parejas`) y de `cruce` (`/api/v1/cruces`); el objeto `cruce` incluye los anillos de ambos progenitores.
 
 - Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
 - Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
