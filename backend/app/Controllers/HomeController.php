@@ -35,7 +35,7 @@ class HomeController {
     }
 
     /**
-     * Devuelve el índice general de endpoints disponibles en la versión 1.
+     * Devuelve el índice general de endpoints disponibles en la versión  .
      */
     public function v1(): void {
         ResponseHelper::success([
@@ -70,6 +70,13 @@ class HomeController {
                     'PUT /api/v1/canarios/{id}',
                     'PATCH /api/v1/canarios/{id}',
                 ],
+                'pairs' => [
+                    'GET /api/v1/parejas',
+                    'GET /api/v1/parejas/{id}',
+                    'POST /api/v1/parejas',
+                    'PUT /api/v1/parejas/{id}',
+                    'PATCH /api/v1/parejas/{id}',
+                  
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',
