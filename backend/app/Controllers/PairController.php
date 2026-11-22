@@ -12,7 +12,7 @@ use CanariApp\Backend\Models\Pair;
 use Throwable;
 
 /**
- * Controlador para los endpoints de parejas y asignación de jaulas (/api/v1/parejas)[cite: 3, 4].
+ * Controlador para los endpoints de parejas y asignación de jaulas (/api/v1/parejas).
  */
 class PairController {
     private const SERVER_FIELDS = [
@@ -29,7 +29,7 @@ class PairController {
     }
 
     /**
-     * Lista las parejas pertenecientes al criador autenticado[cite: 3, 4].
+     * Lista las parejas pertenecientes al criador autenticado.
      */
     public function index(): void {
         $id_criador = $this->resolveCurrentBreederId();
@@ -53,7 +53,7 @@ class PairController {
     }
 
     /**
-     * Muestra el detalle de una pareja si pertenece al criador autenticado[cite: 3, 4].
+     * Muestra el detalle de una pareja si pertenece al criador autenticado.
      */
     public function show(string|int $id): void {
         $id_pareja = $this->parsePositiveId($id);
@@ -83,7 +83,7 @@ class PairController {
     }
 
     /**
-     * Crea una nueva pareja para el criador autenticado[cite: 3, 4].
+     * Crea una nueva pareja para el criador autenticado.
      */
     public function store(): void {
         $id_criador = $this->resolveCurrentBreederId();
@@ -111,7 +111,7 @@ class PairController {
     }
 
     /**
-     * Actualiza una pareja existente (jaula, estado o fecha de cierre)[cite: 3, 4].
+     * Actualiza una pareja existente (jaula, estado o fecha de cierre).
      */
     public function update(string|int $id): void {
         $id_pareja = $this->parsePositiveId($id);
@@ -144,7 +144,7 @@ class PairController {
     }
 
     /**
-     * Rechaza campos asignados por el servidor o inmutables en la creación[cite: 3, 17].
+     * Rechaza campos asignados por el servidor o inmutables en la creación.
      *
      * @param array<string, mixed> $input
      * @return array<string, string>
@@ -170,7 +170,7 @@ class PairController {
     }
 
     /**
-     * Obtiene id_criador del usuario autenticado y responde 403/404 si no aplica[cite: 3, 4, 13].
+     * Obtiene id_criador del usuario autenticado y responde 403/404 si no aplica.
      */
     private function resolveCurrentBreederId(): ?int {
         $authUser = AuthMiddleware::user();
@@ -199,7 +199,7 @@ class PairController {
     }
 
     /**
-     * Lee el cuerpo JSON; si está vacío devuelve [], y si es inválido responde 400[cite: 17].
+     * Lee el cuerpo JSON; si está vacío devuelve [], y si es inválido responde 400.
      *
      * @return array<string, mixed>
      */
@@ -218,7 +218,7 @@ class PairController {
     }
 
     /**
-     * Traduce códigos de error de dominio a respuestas HTTP[cite: 5, 13].
+     * Traduce códigos de error de dominio a respuestas HTTP.
      */
     private function respondDomainError(string $code): void {
         match ($code) {
