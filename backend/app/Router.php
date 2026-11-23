@@ -12,6 +12,7 @@ use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\MatingController;
+use CanariApp\Backend\Controllers\NestController;
 use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
@@ -90,6 +91,12 @@ final class Router {
         $this->router->get('/api/v1/cruces/pareja/(\d+)', MatingController::class . '@byPair');
         $this->router->get('/api/v1/cruces/(\d+)', MatingController::class . '@show');
         $this->router->post('/api/v1/cruces', MatingController::class . '@store');
+
+        // Nidadas: asociadas a un cruce; sin edición ni borrado en este alcance (SRS-RF018, SQL-01).
+        $this->router->get('/api/v1/nidadas', NestController::class . '@index');
+        $this->router->get('/api/v1/nidadas/cruce/(\d+)', NestController::class . '@byMating');
+        $this->router->get('/api/v1/nidadas/(\d+)', NestController::class . '@show');
+        $this->router->post('/api/v1/nidadas', NestController::class . '@store');
 
         // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
         $this->router->get('/api/v1/wiki', WikiController::class . '@index');
