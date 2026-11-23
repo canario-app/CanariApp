@@ -494,18 +494,19 @@ CREATE TRIGGER trg_estado_pareja
     BEFORE INSERT OR UPDATE OF estado ON pareja
     FOR EACH ROW EXECUTE FUNCTION fn_estado_pareja();
 
--- Pareja: macho y hembra con sexo correcto, máximo 6 parejas activas por
--- macho, y ninguno de los dos puede ser cría de esta misma pareja
--- (SRS-RF012, SRS-RF013, SRS-RF022). El "mismo criadero" lo garantizan las
--- llaves compuestas de la tabla.
+-- Pareja: macho y hembra con sexo correcto, y ninguno de los dos puede ser
+-- cría de esta misma pareja (SRS-RF012, SRS-RF022). El "mismo criadero" lo
+-- garantizan las llaves compuestas de la tabla.
+-- Un macho puede tener cualquier cantidad de parejas activas: se quitó el
+-- máximo de 6 de SRS-RF013 (minuta de la primera reunión de QA). La hembra
+-- y la jaula siguen admitiendo una sola pareja activa (uq_pareja_hembra_activa,
+-- uq_pareja_jaula_activa).
 CREATE FUNCTION fn_validar_pareja() RETURNS trigger AS $$
 DECLARE
     v_sexo_m  CHAR(1);
     v_sexo_h  CHAR(1);
-    v_activas INT;
 BEGIN
-    -- Bloquea al macho para evitar dos inserciones simultáneas que superen el máximo
-    SELECT sexo INTO v_sexo_m FROM canario WHERE id_canario = NEW.id_macho FOR UPDATE;
+    SELECT sexo INTO v_sexo_m FROM canario WHERE id_canario = NEW.id_macho;
     SELECT sexo INTO v_sexo_h FROM canario WHERE id_canario = NEW.id_hembra;
 
     IF v_sexo_m IS DISTINCT FROM 'M' THEN
@@ -513,17 +514,6 @@ BEGIN
     END IF;
     IF v_sexo_h IS DISTINCT FROM 'H' THEN
         RAISE EXCEPTION 'El ejemplar % no está registrado como hembra', NEW.id_hembra;
-    END IF;
-
-    IF NEW.estado = 'activa' THEN
-        SELECT COUNT(*) INTO v_activas
-          FROM pareja
-         WHERE id_macho = NEW.id_macho
-           AND estado = 'activa'
-           AND id_pareja <> COALESCE(NEW.id_pareja, -1);
-        IF v_activas >= 6 THEN
-            RAISE EXCEPTION 'El macho ya tiene el máximo de 6 parejas activas';
-        END IF;
     END IF;
 
     IF TG_OP = 'UPDATE' AND EXISTS (

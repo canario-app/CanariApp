@@ -1,0 +1,527 @@
+<mxfile host="Electron">
+  <diagram name="MER CanariApp v7.1" id="mer-canariapp-v7-1">
+    <mxGraphModel dx="2000" dy="1500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="e_Usuario" value="Usuario" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1415" y="220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Usuario" value="id_usuario (PK)&lt;br&gt;nombre (máx. 100)&lt;br&gt;correo (único, sin distinguir mayúsculas)&lt;br&gt;password_hash&lt;br&gt;rol (criador / administrador, no cambia)&lt;br&gt;fecha_creacion" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1371" y="-71" width="258" height="142" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Usuario" target="e_Usuario">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Modo_operacion" value="Modo_operacion" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="615" y="220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Modo_operacion" value="id_modo (PK)&lt;br&gt;modo (mantenimiento / emergencia)&lt;br&gt;fecha_activacion&lt;br&gt;fecha_desactivacion&lt;br&gt;diagnostico&lt;br&gt;fecha_diagnostico&lt;br&gt;acciones_recuperacion" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="556" y="-109" width="287" height="178" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Modo_operacion" target="e_Modo_operacion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Respaldo" value="Respaldo" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2215" y="220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Respaldo" value="id_respaldo (PK)&lt;br&gt;fecha_hora&lt;br&gt;archivo (único)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2205" y="-3" width="190" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Respaldo" target="e_Respaldo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Auditoria" value="Auditoria" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2215" y="720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Auditoria" value="id_auditoria (PK)&lt;br&gt;fecha_hora&lt;br&gt;accion&lt;br&gt;entidad&lt;br&gt;id_registro&lt;br&gt;valor_anterior&lt;br&gt;valor_nuevo&lt;br&gt;motivo" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2508" y="634" width="244" height="232" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Auditoria" target="e_Auditoria">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Criador" value="Criador" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1415" y="720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Criador" value="id_criador (PK)&lt;br&gt;numero_socio (1-5 dígitos)&lt;br&gt;fecha_creacion" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1052" y="487" width="237" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Criador" target="e_Criador">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Jaula" value="Jaula" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="615" y="720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Jaula" value="id_jaula (PK)&lt;br&gt;numero_jaula (entero ≥ 1,&lt;br&gt;único por criador)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="240" y="697" width="280" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Jaula" target="e_Jaula">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Club" value="Club" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="165" y="1220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Club" value="id_club (PK)&lt;br&gt;sigla (2-6 mayúsculas, única)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="121" y="1065" width="258" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Club" target="e_Club">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Canario" value="Canario" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1415" y="1220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Canario" value="id_canario (PK)&lt;br&gt;anillo (1-6 dígitos)&lt;br&gt;numero_socio (1-5 dígitos)&lt;br&gt;temporada (año)&lt;br&gt;sexo (M / H, pendiente en cría)&lt;br&gt;requiere_revision (calculado)&lt;br&gt;fecha_registro&lt;br&gt;único (anillo, club, socio, temporada)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1288" y="1604" width="323" height="232" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Canario" target="e_Canario">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Solicitud_correccion" value="Solicitud_correccion" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2215" y="1220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Solicitud_correccion" value="id_solicitud (PK)&lt;br&gt;dato_a_corregir (sexo / variedad)&lt;br&gt;motivo&lt;br&gt;estado&lt;br&gt;fecha_solicitud&lt;br&gt;fecha_cierre" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2496" y="1161" width="287" height="178" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Solicitud_correccion" target="e_Solicitud_correccion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Variedad" value="Variedad" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="165" y="1720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Variedad" value="id_variedad (PK)&lt;br&gt;codigo (único)&lt;br&gt;nombre&lt;br&gt;tipo (CC / CP)&lt;br&gt;serie&lt;br&gt;sexo (derivado del nombre)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="-135" y="1679" width="190" height="142" as="geometry" />
+        </mxCell>
+        <mxCell id="c12" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Variedad" target="e_Variedad">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Titulo" value="Titulo" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2365" y="1470" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Titulo" value="id_titulo (PK)&lt;br&gt;nombre (máx. 100)&lt;br&gt;fecha (no futura)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2675" y="1447" width="190" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Titulo" target="e_Titulo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Pareja" value="Pareja" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="615" y="1820" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Pareja" value="id_pareja (PK)&lt;br&gt;fecha_formacion (no futura)&lt;br&gt;estado (activa / finalizada / anulada)&lt;br&gt;fecha_fin" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="138" y="1990" width="323" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Pareja" target="e_Pareja">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Cruce" value="Cruce" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="615" y="2370" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Cruce" value="id_cruce (PK)&lt;br&gt;fecha_cruce (no futura)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="282" y="2356" width="215" height="88" as="geometry" />
+        </mxCell>
+        <mxCell id="c15" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Cruce" target="e_Cruce">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Nidada" value="Nidada" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1315" y="2720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Nidada" value="id_nidada (PK)&lt;br&gt;fecha_nacimiento (≥ fecha_cruce)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="2896" width="280" height="88" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Nidada" target="e_Nidada">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Cria" value="Cria" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1815" y="2370" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Cria" value="id_cria (PK)&lt;br&gt;es_portadora (derivado)&lt;br&gt;reservada" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1796" y="2589" width="208" height="142" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Cria" target="e_Cria">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Mutacion" value="Mutacion" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2565" y="2720" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Mutacion" value="id_mutacion (PK)&lt;br&gt;nombre (único)&lt;br&gt;tipo_herencia (autosómica recesiva /&lt;br&gt;ligada al sexo recesiva)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2438" y="2896" width="424" height="88" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Mutacion" target="e_Mutacion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Simulacion" value="Simulacion" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="2915" y="2270" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Simulacion" value="id_simulacion (PK)&lt;br&gt;genotipo_macho&lt;br&gt;genotipo_hembra&lt;br&gt;fecha" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="2905" y="1960" width="190" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="c19" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Simulacion" target="e_Simulacion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_Simulacion_resultado" value="Simulacion_resultado" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="3485" y="2270" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a_Simulacion_resultado" value="id_resultado (PK)&lt;br&gt;sexo_cria&lt;br&gt;genotipo_resultado (visual / portador / sin factor)&lt;br&gt;probabilidad (0 a 1)" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="3392" y="2488" width="417" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" value="" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="a_Simulacion_resultado" target="e_Simulacion_resultado">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c21" value="Tiene cuenta" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="465" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c22" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Usuario" target="c21">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c23" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c21">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c24" value="Activa" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1035" y="215" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c25" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Usuario" target="c24">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c26" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Modo_operacion" target="c24">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c27" value="Genera" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1835" y="215" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c28" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Usuario" target="c27">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c29" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Respaldo" target="c27">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c30" value="Ejecuta" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1835" y="465" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c31" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Usuario" target="c30">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c32" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Auditoria" target="c30">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c33" value="Delega" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1835" y="715" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c34" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c33">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c35" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Auditoria" target="c33">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c36" value="Posee" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1435" y="965" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c37" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c36">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c38" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c36">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c39" value="Dispone" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1035" y="715" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c40" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c39">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c41" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Jaula" target="c39">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c42" value="Identifica" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="810" y="1215" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c43" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Club" target="c42">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c44" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c42">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c45" value="Clasifica" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="910" y="1295" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c46" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Variedad" target="c45">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c47" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c45">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c48" value="Forma (macho, sin máximo)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="885" y="1435" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c49" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c48">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c50" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Pareja" target="c48">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c51" value="Forma (hembra, máx. 1 activa)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1035" y="1575" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c52" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c51">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c53" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Pareja" target="c51">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c54" value="Ocupa (máx. 1 activa)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="635" y="1515" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c55" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Jaula" target="c54">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c56" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Pareja" target="c54">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c57" value="Realiza" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="635" y="2090" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c58" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Pareja" target="c57">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c59" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Cruce" target="c57">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c60" value="Produce" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="985" y="2540" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c61" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Cruce" target="c60">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c62" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Nidada" target="c60">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c63" value="Contiene" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="2540" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c64" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Nidada" target="c63">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c65" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Cria" target="c63">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c66" value="Es un (subtipo)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1765" y="1790" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c67" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Cria" target="c66">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c68" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c66">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c69" value="Porta" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2210" y="2540" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c70" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Mutacion" target="c69">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c71" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Cria" target="c69">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c72" value="Recibe" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1910" y="1340" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c73" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c72">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c74" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Titulo" target="c72">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c75" value="Sobre" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1835" y="1215" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c76" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c75">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c77" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Solicitud_correccion" target="c75">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c78" value="Solicita" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1835" y="965" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c79" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c78">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c80" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Solicitud_correccion" target="c78">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c81" value="Queda en" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2235" y="965" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c82" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Solicitud_correccion" target="c81">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c83" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Auditoria" target="c81">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c84" value="Simula (macho)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2335" y="1815" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c85" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c84">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c86" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion" target="c84">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c87" value="Simula (hembra)" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="1940" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c88" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Canario" target="c87">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c89" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion" target="c87">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c90" value="Se simula" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2760" y="2490" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c91" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Mutacion" target="c90">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c92" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion" target="c90">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c93" value="Resulta en" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="3235" y="2265" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c94" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion" target="c93">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c95" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion_resultado" target="c93">
+          <mxGeometry x="-0.65" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c96" value="Registra" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="1305" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c96a" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c96">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c96b" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Pareja" target="c96">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c97" value="Guarda" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="2185" y="1490" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c97a" value="1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Criador" target="c97">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c97b" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Simulacion" target="c97">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c98" value="Desactiva" style="shape=rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1035" y="315" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c98a" value="0..1" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Usuario" target="c98">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c98b" value="0..N" style="endArrow=none;html=1;fontStyle=1;fontSize=13;labelBackgroundColor=default;" edge="1" parent="1" source="e_Modo_operacion" target="c98">
+          <mxGeometry x="-0.65" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nota_v7" value="&lt;b&gt;Cómo leer el diagrama (v7.1)&lt;/b&gt;&lt;br&gt;• Modelo conceptual: las llaves foráneas no se listan como atributos; cada rombo es una relación y el SQL la implementa con una FK.&lt;br&gt;• Cardinalidad junto a cada entidad: cuántas filas de esa entidad se relacionan con una de la otra. 1 = exactamente una; 0..1 = opcional; 0..N = ninguna o varias.&lt;br&gt;• Usuario–Criador: un usuario con rol criador tiene exactamente un criadero; un administrador, ninguno. El 0..1 resume ambos casos.&lt;br&gt;&lt;br&gt;&lt;b&gt;Reglas que el diagrama no puede dibujar y que aplica canarios_v7_1.sql&lt;/b&gt;&lt;br&gt;• Macho, hembra y jaula de una pareja pertenecen al mismo criador que la pareja (SEG-001). Lo mismo en solicitud y simulación.&lt;br&gt;• Un macho puede tener cualquier cantidad de parejas activas (se quitó el máximo de 6 de SRS-RF013); una hembra y una jaula, una sola (SRS-RF014, RF015). El historial no tiene máximo.&lt;br&gt;• Una pareja nace activa; finalizada o anulada no cambia de estado; con cruces no se anula (SRS-RF017, RF031).&lt;br&gt;• Solo una cría puede quedar sin sexo o sin variedad (SRS-RF020). Un ejemplar no puede ser cría de su propia pareja (SRS-RF022).&lt;br&gt;• Las relaciones Realiza, Produce, Contiene y Es un no se redirigen: un cruce no cambia de pareja, una nidada no cambia de cruce y una cría no cambia de nidada ni de ejemplar.&lt;br&gt;• Al registrar o cambiar el sexo o la variedad de un ejemplar, deben coincidir (SRS-RF009). «Requiere revisión» solo aparece cuando una carga del nomenclador cambia el sexo de una variedad ya asignada (SRS-RF010, RF032).&lt;br&gt;• Un solo modo especial activo a la vez (SRS-RF028). Una emergencia se cierra con diagnóstico, su fecha y las acciones de recuperación (2.5, DAT-003).&lt;br&gt;• La auditoría no se modifica ni se borra (SEG-003). La genealogía no es una entidad: es la vista v_genealogia (SRS-RF022).&lt;br&gt;&lt;br&gt;&lt;b&gt;Lo que la base no garantiza y debe hacer el backend PHP&lt;/b&gt;&lt;br&gt;• Quién ejecuta cada operación: la base comprueba el rol del usuario escrito en la fila (quién activa un modo, quién genera un respaldo), no quién está conectado. La autorización por sesión y por criadero es del backend (SEG-001, tabla de permisos 2.4).&lt;br&gt;• Que el sexo, la variedad y el anillo solo cambien dentro del Modo de Corrección, y que cada corrección quede en la auditoría (SRS-RF030)." style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="-135" y="3044" width="1500" height="470" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

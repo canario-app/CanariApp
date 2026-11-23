@@ -168,16 +168,22 @@ SELECT t('SEG-001 pareja a nombre de otro criador', '23503:fk_pareja_', $q$INSER
 SELECT t('RF012 jaula número 0', '23514:jaula_numero_jaula_check', $q$INSERT INTO jaula (numero_jaula,id_criador) VALUES (0,1)$q$);
 SELECT t('RF017 crear una pareja ya finalizada', 'P0001:se crea en estado activa', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula,estado,fecha_fin) VALUES (1,1,3,2,'finalizada',CURRENT_DATE)$q$);
 SELECT t('RF012 pareja con fecha de formación futura', '23514:pareja_fecha_formacion_check', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula,fecha_formacion) VALUES (1,1,3,2,CURRENT_DATE+1)$q$);
--- Reactivar se prueba aquí, con el macho lejos del máximo y la jaula libre
+-- Reactivar se prueba aquí, con la jaula 2 libre
 SELECT t('RF017 pareja con hembra 3 en jaula 2', 'OK', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula) VALUES (1,1,3,2)$q$);
 SELECT t('RF017 finalizar pareja sin fecha_fin', '23514:ck_pareja_fin', $q$UPDATE pareja SET estado='finalizada' WHERE id_hembra=3$q$);
 SELECT t('RF017 finalizar la pareja de la hembra 3 (libera jaula 2)', 'OK', $q$UPDATE pareja SET estado='finalizada', fecha_fin=CURRENT_DATE WHERE id_hembra=3$q$);
 SELECT t('RF017 reactivar pareja finalizada', 'P0001:finalizada no puede cambiar de estado', $q$UPDATE pareja SET estado='activa', fecha_fin=NULL WHERE id_hembra=3$q$);
 SELECT t('RF017 pasar una pareja finalizada a anulada', 'P0001:finalizada no puede cambiar de estado', $q$UPDATE pareja SET estado='anulada' WHERE id_hembra=3$q$);
 SELECT t('RF013 parejas 2 a 6 del macho', 'OK', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula) VALUES (1,1,4,2),(1,1,5,3),(1,1,6,4),(1,1,7,5),(1,1,8,6)$q$);
-SELECT t('RF013 séptima pareja del macho', 'P0001:máximo de 6 parejas activas', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula) VALUES (1,1,9,7)$q$);
+-- Sin límite de parejas activas por macho (se quitó el máximo de 6 de RF013)
+SELECT t('RF013 séptima pareja activa del macho (sin límite)', 'OK', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula) VALUES (1,1,9,7)$q$);
 SELECT t('RF013 finalizar la pareja de la hembra 4', 'OK', $q$UPDATE pareja SET estado='finalizada', fecha_fin=CURRENT_DATE WHERE id_hembra=4$q$);
-SELECT t('RF013 tras finalizar, nueva pareja con la hembra 9', 'OK', $q$INSERT INTO pareja (id_criador,id_macho,id_hembra,id_jaula) VALUES (1,1,9,7)$q$);
+SELECT t('RF013 tras finalizar una, el macho queda con 6 parejas activas', 'OK',
+ $q$DO $d$ BEGIN
+      IF (SELECT count(*) FROM pareja WHERE id_macho = 1 AND estado = 'activa') <> 6 THEN
+        RAISE EXCEPTION 'se esperaban 6 parejas activas del macho 1';
+      END IF;
+    END $d$$q$);
 SELECT t('RF031 reasignar una pareja finalizada a otro macho', 'OK', $q$UPDATE pareja SET id_macho=11 WHERE id_hembra=4$q$);
 SELECT t('SEG-001 cambiar el criadero de una pareja', 'P0001:id_criador de pareja', $q$UPDATE pareja SET id_criador=2 WHERE id_pareja=1$q$);
 

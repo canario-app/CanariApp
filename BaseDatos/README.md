@@ -12,6 +12,7 @@ Esta carpeta contiene la versión 7.1 del modelo de datos de CanariApp: el esque
 | `pruebas_v7_1.sql` | Comprueba que las reglas funcionan | Después de cada cambio al esquema |
 | `catalogo/seeds/variedad_2026_v7_1.sql` | Carga el nomenclador 2026 (2.661 variedades) | En la base que usa la app, después de los permisos |
 | `admin_inicial_v7_1.sql` | Crea el primer usuario administrador | En la base que usa la app, una sola vez |
+| `parche_sin_limite_parejas_v7_1.sql` | Quita el máximo de 6 parejas activas por macho en una base ya creada | Solo en bases creadas antes de ese cambio; no borra datos |
 | `MER_canarios_v7_1.drawio` | Diagrama entidad-relación | Para entender y presentar el modelo |
 
 ## Orden de ejecución
@@ -97,9 +98,9 @@ Las reglas del SRS se aplican con cuatro herramientas. Conviene reconocerlas al 
 | `CHECK` | Regla sobre una sola fila | El anillo solo tiene dígitos (RF001) |
 | `UNIQUE` e índices únicos | Que algo no se repita | Anillo único (RF003); una pareja activa por hembra (RF015) |
 | Llave foránea (`FOREIGN KEY`) | Que lo referenciado exista | Macho, hembra y jaula del mismo criador que la pareja (SEG-001) |
-| Trigger | Regla que mira otras filas o tablas | Máximo 6 parejas activas por macho (RF013) |
+| Trigger | Regla que mira otras filas o tablas | El sexo del ejemplar coincide con el de su variedad (RF009) |
 
-Cada regla lleva un comentario con el requisito que cumple (`SRS-RF013`, `SEG-001`, `DAT-003`…), para poder ir del SQL al SRS y de vuelta.
+Cada regla lleva un comentario con el requisito que cumple (`SRS-RF015`, `SEG-001`, `DAT-003`…), para poder ir del SQL al SRS y de vuelta.
 
 Tres columnas las calcula la base y **no se escriben desde PHP**: `variedad.sexo`, `cria.es_portadora` y `canario.requiere_revision`.
 
@@ -121,7 +122,7 @@ Carga datos de ejemplo ficticios y ejecuta 136 casos. Cada caso intenta una oper
 Cada caso tiene esta forma:
 
 ```sql
-SELECT t('RF013 séptima pareja del macho', 'P0001:máximo de 6 parejas activas',
+SELECT t('RF015 hembra con pareja activa', '23505:uq_pareja_hembra_activa',
          $q$INSERT INTO pareja (...) VALUES (...)$q$);
 ```
 
