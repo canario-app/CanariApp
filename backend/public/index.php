@@ -15,11 +15,25 @@ try {
     if (is_file($envFile)) {
         Dotenv\Dotenv::createImmutable(BASE_PATH)->safeLoad();
     }
-    
+
     App::boot();
+
+    // Zona horaria explícita para evitar desfase de fechas entre 21:00 y 24:00 (UTC)
+    $timezone = App::get('timezone') ?? $_ENV['APP_TIMEZONE'] ?? getenv('APP_TIMEZONE') ?: 'America/Santiago';
+    if (is_string($timezone) && trim($timezone) !== '') {
+        date_default_timezone_set(trim($timezone));
+    }
 
     if (!App::get('debug', false)) {
         ini_set('display_errors', '0');
+    }
+
+    // Validación temprana de JWT_SECRET al arrancar
+    $jwtSecret = App::get('jwt.secret') ?? $_ENV['JWT_SECRET'] ?? getenv('JWT_SECRET');
+    if (!is_string($jwtSecret) || trim($jwtSecret) === '') {
+        ResponseHelper::internalError(
+            'Error de configuración del servidor: falta definir JWT_SECRET en el entorno.'
+        );
     }
 
     // 2. Ejecutamos el router
@@ -28,11 +42,11 @@ try {
 
 } catch (Throwable $exception) {
     error_log((string) $exception);
-    
+
     // Si falla Dotenv o App::boot, ahora pasará por aquí y devolverá un JSON
     if (class_exists(App::class) && App::get('debug', false)) {
         ResponseHelper::internalError($exception->getMessage());
     }
-    
+
     ResponseHelper::internalError('Ocurrió un error interno en el servidor.');
 }

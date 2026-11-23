@@ -75,6 +75,7 @@ class BackupController {
 
     /**
      * [Admin] Genera/registra un respaldo y rota los excedentes más allá de los 7 más recientes.
+     * Si pg_dump falla, aborta sin registrar en base de datos ni eliminar respaldos previos.
      */
     public function store(): void {
         $adminUserId = $this->ensureAdminRole();
@@ -95,11 +96,17 @@ class BackupController {
             ? trim($input['motivo'])
             : 'Generación y registro de respaldo administrativo';
 
-        $physicalDumpCreated = $this->tryCreatePhysicalDump($fileName);
+        if (!$this->createPhysicalDump($fileName)) {
+            ResponseHelper::internalError(
+                'No se pudo generar el archivo de respaldo con pg_dump; no se registró el respaldo ni se aplicó la rotación.'
+            );
+            return;
+        }
 
         try {
             $result = $this->backupModel->registerAndRotate($fileName, $adminUserId);
             if (is_string($result)) {
+                $this->removePhysicalBackupIfExists($fileName);
                 $this->respondDomainError($result);
                 return;
             }
@@ -122,20 +129,19 @@ class BackupController {
                 entity: 'respaldo',
                 recordId: $createdId,
                 newValue: [
-                    'archivo'        => $fileName,
-                    'volcado_fisico' => $physicalDumpCreated,
-                    'rotados'        => $rotatedFiles,
+                    'archivo' => $fileName,
+                    'rotados' => $rotatedFiles,
                 ],
                 reason: $motivo,
                 userId: $adminUserId
             );
 
             ResponseHelper::created([
-                'respaldo'       => $created,
-                'volcado_fisico' => $physicalDumpCreated,
-                'rotados'        => $rotatedFiles,
+                'respaldo' => $created,
+                'rotados'  => $rotatedFiles,
             ], 'Respaldo registrado y rotación aplicada exitosamente.');
         } catch (Throwable) {
+            $this->removePhysicalBackupIfExists($fileName);
             ResponseHelper::internalError('No se pudo registrar el respaldo.');
         }
     }
@@ -174,9 +180,10 @@ class BackupController {
     }
 
     /**
-     * Intenta generar el archivo SQL mediante pg_dump en storage/backups/ si está disponible.
+     * Genera el volcado SQL mediante pg_dump en storage/backups/.
+     * Si el proceso falla o deja un archivo vacío, limpia el artefacto y devuelve false.
      */
-    private function tryCreatePhysicalDump(string $fileName): bool {
+    private function createPhysicalDump(string $fileName): bool {
         if (!function_exists('exec')) {
             return false;
         }
@@ -197,6 +204,10 @@ class BackupController {
         }
 
         $targetPath = $backupDir . DIRECTORY_SEPARATOR . basename($fileName);
+        if (is_file($targetPath)) {
+            return false;
+        }
+
         $command = sprintf(
             'PGPASSWORD=%s pg_dump -h %s -p %s -U %s -F p -f %s %s 2>/dev/null',
             escapeshellarg($dbPass),
@@ -211,7 +222,15 @@ class BackupController {
         $exitCode = 1;
         @exec($command, $output, $exitCode);
 
-        return $exitCode === 0 && is_file($targetPath);
+        if ($exitCode !== 0 || !is_file($targetPath) || (int) @filesize($targetPath) <= 0) {
+            if (is_file($targetPath)) {
+                @unlink($targetPath);
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
