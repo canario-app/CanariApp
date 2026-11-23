@@ -18,12 +18,14 @@ use Throwable;
  *  - El nombre de archivo es único y no vacío (uq / CHECK btrim(archivo) <> '').
  *  - Se conservan únicamente los 7 respaldos más recientes; al registrar uno
  *    nuevo se rotan y eliminan los excedentes más antiguos (DAT-003).
+ *  - Política automática: al menos 1 respaldo cada 2 días (48 horas).
  */
 class Backup extends BaseModel {
     protected string $table = 'respaldo';
     protected string $primaryKey = 'id_respaldo';
 
     public const MAX_RETENTION = 7;
+    public const AUTO_BACKUP_INTERVAL_SECONDS = 172800; // 48 horas (2 días)
 
     public const ERROR_INVALID_DATA = 'invalid_data';
     public const ERROR_DUPLICATE_FILE = 'duplicate_file';
@@ -52,6 +54,24 @@ class Backup extends BaseModel {
             . ' ORDER BY r.fecha_hora DESC, r.id_respaldo DESC';
 
         return $this->fetchAll($sql);
+    }
+
+    /**
+     * Indica si ya transcurrieron al menos 48 horas desde el último respaldo registrado
+     * (o si no existe ningún respaldo aún).
+     */
+    public function isAutoBackupDue(int $intervalSeconds = self::AUTO_BACKUP_INTERVAL_SECONDS): bool {
+        $row = $this->fetch(
+            'SELECT EXTRACT(EPOCH FROM MAX(fecha_hora))::BIGINT AS last_epoch
+               FROM ' . $this->quoteIdentifier($this->table)
+        );
+
+        $lastEpoch = $row['last_epoch'] ?? null;
+        if ($lastEpoch === null || !is_numeric($lastEpoch)) {
+            return true;
+        }
+
+        return (time() - (int) $lastEpoch) >= $intervalSeconds;
     }
 
     /**

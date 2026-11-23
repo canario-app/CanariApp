@@ -1029,7 +1029,7 @@ Consulta de solo lectura sobre la bitácora inmutable `auditoria` (`SEG-003`, `t
 
 ### 6.5 Respaldos y rotación
 
-Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`). Primero genera el volcado SQL mediante `pg_dump` en `storage/backups/`; si `pg_dump` falla, aborta sin registrar en `respaldo` ni eliminar respaldos previos.
+Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`)[cite: 17]. El sistema ejecuta además un respaldo automático cada **2 días (48 horas)** (`id_usuario = null`) tanto mediante el script CLI `php bin/auto_backup.php` como al consultar la gestión de respaldos si se superó el intervalo. Primero genera el volcado SQL mediante `pg_dump` en `storage/backups/`; si `pg_dump` falla, aborta sin registrar en `respaldo` ni eliminar respaldos previos.
 
 #### 1. Listar respaldos vigentes
 
@@ -1037,7 +1037,7 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 |---|---|
 | Método y ruta | `GET /api/v1/admin/respaldos` |
 | Quién puede usarla | Administrador |
-| Ejemplo de respuesta | `200` con `data` = `{"items": [...], "total": 7, "max_retention": 7}` |
+| Ejemplo de respuesta | `200` con `data` = `{"items": [...], "total": 7, "max_retention": 7, "auto_backup_interval_h": 48, "auto_backup_triggered": false}` |
 | Errores esperados | `401`, `403`, `500` |
 
 #### 2. Ver detalle de un respaldo
@@ -1060,6 +1060,54 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | Ejemplo de petición | `{"motivo": "Respaldo preventivo previo a cierre de temporada"}` |
 | Ejemplo de respuesta | `201` con `data` = `{"respaldo": {...}, "rotados": ["canariapp_backup_...sql"]}` |
 | Errores esperados | `400`, `401`, `403`, `409` nombre de archivo duplicado, `422` nombre inválido, `500` fallo al ejecutar `pg_dump` (no registra ni rota) |
+
+#### 4. Restaurar respaldo (`SRS-RF029`)
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/admin/respaldos/{id}/restaurar` |
+| Quién puede usarla | Administrador |
+| Campos | `{id}` entero positivo (`id_respaldo`). Cuerpo opcional: `{"motivo": "..."}` |
+| Ejemplo de respuesta | `200` con `data` = `{"respaldo": {...}, "restaurado": true}` |
+| Errores esperados | `400`, `401`, `403`, `404` respaldo o archivo `.sql` inexistente, `500` fallo al ejecutar `psql` |
+
+---
+
+### 6.6 Carga administrativa de catálogos oficiales
+
+#### 1. Cargar o actualizar nomenclador oficial (`SRS-RF010`)
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/admin/nomenclador` |
+| Quién puede usarla | Administrador |
+| Formatos admitidos | Objeto individual `{"codigo", "nombre", "tipo", "serie"}`, lote JSON (`{"variedades": [...]}` / `{"items": [...]}` / arreglo raíz) o CSV en `{"contenido": "..."}` |
+| Ejemplo de petición | `{"variedades": [{"codigo": "01-001", "nombre": "AMARILLO INTENSO", "tipo": "CC", "serie": "Lipocrómicos"}]}` |
+| Ejemplo de respuesta | `201` con `data` = `{"procesadas": 1, "insertadas": 1, "actualizadas": 0, "ejemplares_requieren_revision": 0, "items": [...]}` |
+| Errores esperados | `400`, `401`, `403`, `422` validación (`codigo` 1–10 chars, `nombre` 1–150 chars, `tipo` `"CC"` o `"CP"`), `500` |
+| Reglas de validación | Si un `codigo` ya existe se actualiza sin eliminar ejemplares; si cambia el sexo derivado de la variedad, PostgreSQL marca automáticamente `canario.requiere_revision = true` |
+
+#### 2. Registrar sigla oficial de club (`SRS-RF011`)
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/admin/clubes` |
+| Quién puede usarla | Administrador |
+| Campos obligatorios | `sigla` (2–6 letras mayúsculas `^[A-Z]{2,6}$`) o lote `{"clubes": ["FOCH", "AOB"]}` |
+| Ejemplo de petición | `{"sigla": "FOCH"}` |
+| Ejemplo de respuesta | `201` con `data` = `{"id_club": 5, "sigla": "FOCH"}` |
+| Errores esperados | `400`, `401`, `403`, `409` sigla duplicada, `422` formato inválido, `500` |
+
+#### 3. Registrar o cargar mutaciones genéticas (`SRS-RF027`)
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/admin/mutaciones` |
+| Quién puede usarla | Administrador |
+| Campos obligatorios | `nombre` (1–100 chars, único sin distinguir mayúsculas), `tipo_herencia` (`"autosómica recesiva"` o `"ligada al sexo recesiva"`), o lote `{"mutaciones": [...]}` |
+| Ejemplo de petición | `{"nombre": "Ágata", "tipo_herencia": "ligada al sexo recesiva"}` |
+| Ejemplo de respuesta | `201` con `data` = `{"id_mutacion": 3, "nombre": "Ágata", "tipo_herencia": "ligada al sexo recesiva"}` |
+| Errores esperados | `400`, `401`, `403`, `409` nombre de mutación duplicado, `422` validación, `500` |
 
 ---
 
