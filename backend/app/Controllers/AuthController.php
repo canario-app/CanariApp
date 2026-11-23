@@ -31,6 +31,31 @@ class AuthController {
         $user = $userModel->findByCorreo($correo);
 
         if (!$user || !$userModel->verifyPassword($password, $user['password_hash'])) {
+            $failedUserId = $user !== null && isset($user['id_usuario'])
+                ? (int) $user['id_usuario']
+                : null;
+
+            $reason = $user !== null
+                ? 'Intento de inicio de sesión fallido: contraseña incorrecta'
+                : 'Intento de inicio de sesión fallido: correo no registrado';
+
+            try {
+                // SEG-003: Nunca se registra la contraseña ingresada
+                AuditHelper::log(
+                    action: 'login_fallido',
+                    entity: 'sesion',
+                    recordId: $failedUserId,
+                    newValue: [
+                        'correo'             => $correo,
+                        'usuario_registrado' => $user !== null,
+                    ],
+                    reason: $reason,
+                    userId: $failedUserId
+                );
+            } catch (Throwable) {
+                // No interrumpir la respuesta 401 si falla el registro en auditoría
+            }
+
             ResponseHelper::unauthorized('Credenciales incorrectas.');
         }
 

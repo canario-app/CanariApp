@@ -9,8 +9,26 @@ use CanariApp\Backend\Config\Db;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Exception;
+use RuntimeException;
 
 class AuthHelper {
+    /**
+     * Obtiene la clave secreta JWT verificando que esté configurada y no vacía.
+     */
+    private static function getJwtSecret(): string {
+        $secret = App::get('jwt.secret')
+            ?? $_ENV['JWT_SECRET']
+            ?? getenv('JWT_SECRET');
+
+        if (!is_string($secret) || trim($secret) === '') {
+            throw new RuntimeException(
+                'Error de configuración del servidor: falta definir JWT_SECRET en el entorno.'
+            );
+        }
+
+        return $secret;
+    }
+
     /**
      * Obtiene la duración de la sesión en segundos desde la configuración o JWT_EXPIRATION.
      */
@@ -30,7 +48,7 @@ class AuthHelper {
      * Genera un token JWT incluyendo el ID, correo y rol del usuario.
      */
     public static function generateToken(int|string $userId, string $correo, string $rol): string {
-        $secret = App::get('jwt.secret');
+        $secret = self::getJwtSecret();
         $issuedAt = time();
         $expirationTime = $issuedAt + self::getTokenExpiration();
 
@@ -51,7 +69,7 @@ class AuthHelper {
      */
     public static function validateToken(string $token): ?object {
         try {
-            $secret = App::get('jwt.secret');
+            $secret = self::getJwtSecret();
             $decoded = JWT::decode($token, new Key($secret, 'HS256'));
 
             if (self::isTokenRevoked($token)) {

@@ -9,9 +9,10 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
 use CanariApp\Backend\Models\Canary;
+use CanariApp\Backend\Models\User;
 
 class CanaryController {
-    /** Campos del anillo y del ejemplar que puede escribir el cliente. */
+    /** Campos del anillo y del ejemplar que puede escribir el cliente en alta/edición estándar. */
     private const WRITABLE_FIELDS = [
         'anillo',
         'id_club',
@@ -28,11 +29,12 @@ class CanaryController {
         'requiere_revision',
     ];
 
-    /** Metadatos aceptados cuando se activa el Modo de Corrección en PATCH/PUT. */
+    /** Metadatos aceptados cuando se activa el Modo de Corrección en PATCH/PUT (RF031/RF033). */
     private const CORRECTION_META_FIELDS = [
         'modo_correccion',
         'motivo',
         'id_solicitud',
+        'password',
         'anular_parejas',
     ];
 
@@ -78,7 +80,8 @@ class CanaryController {
     }
 
     /**
-     * [Criador] Crea un canario en su criadero. [Admin] Recibe 403 Forbidden.
+     * [Criador] Crea un canario adulto/sexado en su criadero.
+     * Las crías sin sexo ni variedad deben registrarse mediante POST /api/v1/crias (RF019, RF020).
      */
     public function store(): void {
         $this->ensureBreederRole();
@@ -120,7 +123,9 @@ class CanaryController {
      *
      * Sin Modo de Corrección bloquea la modificación de `anillo` y de `sexo`
      * ya asignado. Con Modo de Corrección (`X-Correction-Mode: true` o
-     * `modo_correccion: true`) exige `motivo` y audita la corrección.
+     * `modo_correccion: true`) exige `id_solicitud` aprobada del mismo ejemplar,
+     * `motivo` y la contraseña actual (`password`) del criador (RF031, RF033),
+     * permitiendo corregir únicamente el dato solicitado (`sexo` o `id_variedad`).
      */
     public function update(int|string $id): void {
         $this->ensureBreederRole();
@@ -169,14 +174,40 @@ class CanaryController {
         $filtered = $this->filterFields($input);
 
         if ($isCorrectionMode) {
+            // El anillo nunca es editable mediante Modo de Corrección
+            if (array_key_exists('anillo', $filtered)) {
+                ResponseHelper::validationError([
+                    'anillo' => 'El número de anillo no puede modificarse mediante Modo de Corrección; solo se corrige sexo o variedad según solicitud aprobada.',
+                ]);
+            }
+
+            // Verifica contraseña actual del criador (RF031)
+            $userId = (int) AuthMiddleware::userId();
+            $password = (string) ($input['password'] ?? '');
+            $userModel = new User();
+            $user = $userModel->find($userId);
+
+            if ($user === null || !$userModel->verifyPassword($password, (string) $user['password_hash'])) {
+                ResponseHelper::unauthorized('La contraseña actual del criador es incorrecta.');
+            }
+
             $reason = trim((string) ($input['motivo'] ?? ''));
-            $requestId = isset($input['id_solicitud']) ? $this->positiveInt($input['id_solicitud']) : null;
+            $requestId = $this->positiveInt($input['id_solicitud'] ?? null);
+            if ($requestId === null) {
+                ResponseHelper::validationError([
+                    'id_solicitud' => 'Debe indicar el ID de una solicitud de corrección aprobada.',
+                ]);
+            }
+
             $annulPairs = filter_var($input['anular_parejas'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             $correctionResult = $model->updateWithCorrection(
                 $idCanario,
                 $filtered,
                 $targetBreederId,
+                $requestId,
+                $userId,
+                $reason,
                 $annulPairs
             );
 
@@ -185,21 +216,9 @@ class CanaryController {
                 return;
             }
 
-            AuditHelper::log(
-                action: 'correccion',
-                entity: 'canario',
-                recordId: $idCanario,
-                previousValue: $this->extractTrackedSnapshot($correctionResult['previous'], $filtered),
-                newValue: $filtered,
-                reason: $reason,
-                userId: (int) AuthMiddleware::userId(),
-                requestingBreederId: $targetBreederId,
-                requestId: $requestId
-            );
-
             ResponseHelper::success(
                 $correctionResult['updated'],
-                'Canario corregido exitosamente en Modo de Corrección.'
+                'Canario corregido y solicitud cerrada exitosamente.'
             );
         }
 
@@ -287,6 +306,7 @@ class CanaryController {
      */
     private function validate(array $input, bool $isCreate, bool $isCorrectionMode): array {
         $errors = [];
+        $maxSeason = (int) date('Y');
 
         foreach (self::SERVER_FIELDS as $field) {
             if (array_key_exists($field, $input)) {
@@ -314,13 +334,24 @@ class CanaryController {
                 $errors['motivo'] = 'El motivo no puede superar los 500 caracteres.';
             }
 
-            if (
-                array_key_exists('id_solicitud', $input)
-                && $input['id_solicitud'] !== null
-                && $this->positiveInt($input['id_solicitud']) === null
-            ) {
-                $errors['id_solicitud'] = 'El identificador de solicitud debe ser un entero positivo.';
+            if ($this->positiveInt($input['id_solicitud'] ?? null) === null) {
+                $errors['id_solicitud'] = 'Debe indicar el ID de una solicitud de corrección aprobada.';
             }
+
+            $password = $input['password'] ?? null;
+            if (!is_string($password) || $password === '') {
+                $errors['password'] = 'Debe ingresar su contraseña actual para confirmar la corrección (RF031).';
+            }
+
+            // En Modo de Corrección solo se acepta sexo o id_variedad
+            $forbiddenCorrectionFields = ['anillo', 'id_club', 'numero_socio', 'temporada'];
+            foreach ($forbiddenCorrectionFields as $forbiddenField) {
+                if (array_key_exists($forbiddenField, $input)) {
+                    $errors[$forbiddenField] = 'Este campo no puede modificarse mediante Modo de Corrección.';
+                }
+            }
+        } elseif (array_key_exists('password', $input)) {
+            $errors['password'] = 'La contraseña solo se envía al confirmar una corrección (RF031).';
         }
 
         foreach (self::WRITABLE_FIELDS as $field) {
@@ -329,7 +360,9 @@ class CanaryController {
                 continue;
             }
             if (!$present) {
-                $errors[$field] = 'Este campo es obligatorio.';
+                $errors[$field] = in_array($field, ['sexo', 'id_variedad'], true)
+                    ? 'Este campo es obligatorio al registrar un ejemplar adulto. Para crías sin sexo o variedad pendientes use POST /api/v1/crias.'
+                    : 'Este campo es obligatorio.';
                 continue;
             }
 
@@ -342,7 +375,7 @@ class CanaryController {
                     && preg_match('/^[0-9]{1,5}$/', trim((string) $value)) === 1,
                 'sexo' => is_string($value) && in_array($value, ['M', 'H'], true),
                 'id_club', 'id_variedad' => $this->positiveInt($value) !== null,
-                'temporada' => $temporada !== null && $temporada >= 1000 && $temporada <= 9999,
+                'temporada' => $temporada !== null && $temporada >= 1000 && $temporada <= $maxSeason,
             };
 
             if (!$valid) {
@@ -367,7 +400,7 @@ class CanaryController {
             'numero_socio' => 'El número de socio debe tener entre 1 y 5 dígitos.',
             'sexo' => 'El sexo debe ser "M" o "H".',
             'id_club', 'id_variedad' => 'Debe indicar un identificador válido.',
-            'temporada' => 'La temporada debe ser un año de 4 dígitos.',
+            'temporada' => 'La temporada debe ser un año de 4 dígitos y no puede ser mayor al año actual (' . date('Y') . ').',
             default => 'El valor no es válido.',
         };
     }
@@ -375,8 +408,23 @@ class CanaryController {
     private function handleError(string $code): void {
         match ($code) {
             'correction_mode_required' => ResponseHelper::forbidden(
-                'Debe activar el Modo de Corrección para modificar el sexo o el anillo del ejemplar.'
+                'Debe activar el Modo de Corrección para modificar el sexo del ejemplar.'
             ),
+            'request_not_found' => ResponseHelper::notFound(
+                'La solicitud de corrección indicada no existe.'
+            ),
+            'request_mismatch' => ResponseHelper::forbidden(
+                'La solicitud de corrección no corresponde a este canario o a tu criadero.'
+            ),
+            'request_not_approved' => ResponseHelper::conflict(
+                'La solicitud de corrección debe estar en estado aprobada antes de aplicar el cambio.'
+            ),
+            'request_already_closed' => ResponseHelper::conflict(
+                'La solicitud de corrección ya fue aplicada y cerrada anteriormente.'
+            ),
+            'correction_field_mismatch' => ResponseHelper::validationError([
+                'correccion' => 'Solo puede modificar exactamente el dato autorizado en la solicitud aprobada (sexo o id_variedad).',
+            ]),
             'active_pairs_conflict' => ResponseHelper::conflict(
                 'El ejemplar participa en parejas activas o finalizadas; envíe anular_parejas=true o reasígnelas antes de corregir el sexo.'
             ),

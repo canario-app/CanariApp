@@ -20,6 +20,17 @@ class ChickController {
         'id_cria',
         'id_criador',
         'es_portadora',
+        'fecha_registro',
+        'requiere_revision',
+    ];
+
+    private const CANARY_RING_FIELDS = [
+        'anillo',
+        'id_club',
+        'numero_socio',
+        'temporada',
+        'sexo',
+        'id_variedad',
     ];
 
     private Chick $chickModel;
@@ -101,7 +112,13 @@ class ChickController {
     }
 
     /**
-     * Registra una nueva cría asociada a una nidada y un canario del criadero.
+     * Registra una nueva cría asociada a una nidada.
+     *
+     * Admite dos modalidades (RF019, RF020):
+     *  1. Alta conjunta transaccional (recomendada para crías sin sexo o variedad):
+     *     envía los datos de anillo (`anillo`, `id_club`, `numero_socio`, `temporada`,
+     *     y opcionalmente `sexo` e `id_variedad` en null) junto con `id_nidada`.
+     *  2. Vinculación de un ejemplar ya registrado mediante `id_canario`.
      */
     public function store(): void {
         $id_criador = $this->resolveCurrentBreederId();
@@ -123,8 +140,29 @@ class ChickController {
             $errors['id_nidada'] = 'Debe indicar una nidada válida.';
         }
 
-        $id_canario = Sanitizer::int($input['id_canario'] ?? null, 1);
-        if ($id_canario === null) {
+        $hasCanaryId = array_key_exists('id_canario', $input) && $input['id_canario'] !== null && $input['id_canario'] !== '';
+        $nestedCanary = is_array($input['canario'] ?? null) ? $input['canario'] : null;
+        $hasFlatCanaryData = false;
+
+        foreach (self::CANARY_RING_FIELDS as $ringField) {
+            if (array_key_exists($ringField, $input)) {
+                $hasFlatCanaryData = true;
+                break;
+            }
+        }
+
+        $isCombinedCreate = $nestedCanary !== null || $hasFlatCanaryData;
+
+        if ($hasCanaryId && $isCombinedCreate) {
+            $errors['id_canario'] = 'Indique id_canario de un ejemplar existente o los datos del nuevo anillo, pero no ambos.';
+        } elseif (!$hasCanaryId && !$isCombinedCreate) {
+            $errors['canario'] = 'Debe indicar los datos del anillo de la cría (anillo, id_club, numero_socio, temporada) o un id_canario existente.';
+        }
+
+        if ($isCombinedCreate) {
+            $canarySource = $nestedCanary ?? $input;
+            $errors = array_merge($errors, $this->validateNewChickCanary($canarySource));
+        } elseif ($hasCanaryId && Sanitizer::int($input['id_canario'], 1) === null) {
             $errors['id_canario'] = 'Debe indicar un ejemplar de canario válido.';
         }
 
@@ -133,12 +171,35 @@ class ChickController {
         }
 
         try {
-            $result = $this->chickModel->createForBreeder([
-                'id_nidada'       => $id_nidada,
-                'id_canario'      => $id_canario,
-                'factor_genetico' => $input['factor_genetico'] ?? null,
-                'reservada'       => $input['reservada'] ?? false,
-            ], $id_criador);
+            if ($isCombinedCreate) {
+                $canarySource = $nestedCanary ?? $input;
+                $userId = (int) (AuthMiddleware::userId() ?? 0);
+
+                $result = $this->chickModel->createWithCanaryForBreeder(
+                    [
+                        'anillo'       => $canarySource['anillo'] ?? null,
+                        'id_club'      => $canarySource['id_club'] ?? null,
+                        'numero_socio' => $canarySource['numero_socio'] ?? null,
+                        'temporada'    => $canarySource['temporada'] ?? null,
+                        'sexo'         => $canarySource['sexo'] ?? null,
+                        'id_variedad'  => $canarySource['id_variedad'] ?? null,
+                    ],
+                    [
+                        'id_nidada'       => $id_nidada,
+                        'factor_genetico' => $input['factor_genetico'] ?? null,
+                        'reservada'       => $input['reservada'] ?? false,
+                    ],
+                    $id_criador,
+                    $userId
+                );
+            } else {
+                $result = $this->chickModel->createForBreeder([
+                    'id_nidada'       => $id_nidada,
+                    'id_canario'      => Sanitizer::int($input['id_canario'], 1),
+                    'factor_genetico' => $input['factor_genetico'] ?? null,
+                    'reservada'       => $input['reservada'] ?? false,
+                ], $id_criador);
+            }
 
             if (is_string($result)) {
                 $this->respondDomainError($result);
@@ -195,6 +256,63 @@ class ChickController {
         }
     }
 
+    /**
+     * Valida los campos del ejemplar a crear junto con la cría (sexo e id_variedad son opcionales/null).
+     *
+     * @param array<string, mixed> $canaryData
+     * @return array<string, string>
+     */
+    private function validateNewChickCanary(array $canaryData): array {
+        $errors = [];
+        $maxSeason = (int) date('Y');
+
+        foreach (self::SERVER_FIELDS as $serverField) {
+            if (array_key_exists($serverField, $canaryData)) {
+                $errors[$serverField] = 'Este campo lo asigna el servidor.';
+            }
+        }
+
+        if (array_key_exists('id_criador', $canaryData)) {
+            $errors['id_criador'] = 'El criador se toma del usuario autenticado.';
+        }
+
+        $anillo = $canaryData['anillo'] ?? null;
+        if (!is_scalar($anillo) || preg_match('/^[0-9]{1,6}$/', trim((string) $anillo)) !== 1) {
+            $errors['anillo'] = 'El número de anillo es obligatorio y debe tener entre 1 y 6 dígitos.';
+        }
+
+        $numeroSocio = $canaryData['numero_socio'] ?? null;
+        if (!is_scalar($numeroSocio) || preg_match('/^[0-9]{1,5}$/', trim((string) $numeroSocio)) !== 1) {
+            $errors['numero_socio'] = 'El número de socio es obligatorio y debe tener entre 1 y 5 dígitos.';
+        }
+
+        if (Sanitizer::int($canaryData['id_club'] ?? null, 1) === null) {
+            $errors['id_club'] = 'Debe indicar un club válido.';
+        }
+
+        $temporada = Sanitizer::int($canaryData['temporada'] ?? null, 1);
+        if ($temporada === null || $temporada < 1000 || $temporada > $maxSeason) {
+            $errors['temporada'] = 'La temporada debe ser un año de 4 dígitos y no puede ser mayor al año actual (' . date('Y') . ').';
+        }
+
+        if (array_key_exists('sexo', $canaryData) && $canaryData['sexo'] !== null && $canaryData['sexo'] !== '') {
+            if (!is_string($canaryData['sexo']) || !in_array($canaryData['sexo'], ['M', 'H'], true)) {
+                $errors['sexo'] = 'El sexo debe ser "M", "H" o null si aún está pendiente.';
+            }
+        }
+
+        if (
+            array_key_exists('id_variedad', $canaryData)
+            && $canaryData['id_variedad'] !== null
+            && $canaryData['id_variedad'] !== ''
+            && Sanitizer::int($canaryData['id_variedad'], 1) === null
+        ) {
+            $errors['id_variedad'] = 'La variedad debe ser un identificador válido o null si aún está pendiente.';
+        }
+
+        return $errors;
+    }
+
     private function resolveCurrentBreederId(): ?int {
         $authUser = AuthMiddleware::user();
         $rol = $authUser?->rol ?? null;
@@ -234,15 +352,16 @@ class ChickController {
     private function respondDomainError(string $code): void {
         match ($code) {
             Chick::ERROR_NOT_FOUND => ResponseHelper::notFound('La nidada o la cría indicada no existe en tu criadero.'),
+            Chick::ERROR_CONFLICT_ANILLO => ResponseHelper::conflict('El anillo no está disponible.'),
             Chick::ERROR_INVALID_REFERENCE => ResponseHelper::validationError(
-                ['referencia' => 'El canario o la mutación indicada no existe o pertenece a otro criadero.'],
+                ['referencia' => 'El club, la variedad, el canario o la mutación indicada no existe o pertenece a otro criadero.'],
                 'Referencia inválida.'
             ),
             Chick::ERROR_CONFLICT => ResponseHelper::conflict(
                 'El canario ya está registrado como cría o contradice las reglas de la base de datos.'
             ),
             default => ResponseHelper::validationError(
-                ['cria' => 'Los datos de la cría no son válidos.'],
+                ['cria' => 'Los datos de la cría o del ejemplar no son válidos (verifique coherencia entre sexo y variedad).'],
                 'Error de validación.'
             ),
         };

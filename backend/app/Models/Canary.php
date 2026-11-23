@@ -28,7 +28,7 @@ class Canary extends BaseModel {
     public const MAX_PEDIGREE_GENERATIONS = 6;
 
     /**
-     * Campos que el cliente puede escribir en alta o Modo de Corrección.
+     * Campos que el cliente puede escribir en el alta estándar.
      *
      * @var array<int, string>
      */
@@ -41,6 +41,16 @@ class Canary extends BaseModel {
         'id_variedad',
     ];
 
+    /**
+     * Campos admitidos en Modo de Corrección según dato_a_corregir de solicitud_correccion.
+     *
+     * @var array<string, string>
+     */
+    private const CORRECTION_FIELD_MAP = [
+        'sexo'     => 'sexo',
+        'variedad' => 'id_variedad',
+    ];
+
     private const ERROR_INVALID_DATA = 'invalid_data';
     private const ERROR_CONFLICT_ANILLO = 'conflict_anillo';
     private const ERROR_INVALID_REFERENCE = 'invalid_reference';
@@ -48,6 +58,11 @@ class Canary extends BaseModel {
     private const ERROR_CORRECTION_REQUIRED = 'correction_mode_required';
     private const ERROR_ACTIVE_PAIRS = 'active_pairs_conflict';
     private const ERROR_PAIRS_WITH_MATINGS = 'pairs_with_matings_conflict';
+    private const ERROR_REQUEST_NOT_FOUND = 'request_not_found';
+    private const ERROR_REQUEST_MISMATCH = 'request_mismatch';
+    private const ERROR_REQUEST_NOT_APPROVED = 'request_not_approved';
+    private const ERROR_REQUEST_ALREADY_CLOSED = 'request_already_closed';
+    private const ERROR_CORRECTION_FIELD_MISMATCH = 'correction_field_mismatch';
 
     /**
      * Busca un canario por su PK junto con club, variedad y criador.
@@ -71,7 +86,7 @@ class Canary extends BaseModel {
      *
      * @return array<string, mixed>|null
      */
-    public function findAncestry(int $idCanario, int $maxGenerations = self::DEFAULT_PEDIGREE_GENERATIONS): ?array {
+    public function findAncestry(int $idCanario, int$maxGenerations = self::DEFAULT_PEDIGREE_GENERATIONS): ?array {
         $depth = max(1, min($maxGenerations, self::MAX_PEDIGREE_GENERATIONS));
 
         $sql = '
@@ -347,7 +362,7 @@ class Canary extends BaseModel {
      * Actualiza un canario en modo estándar (sin Modo de Corrección).
      *
      * Rechaza cambios sobre anillo o sobre un sexo ya asignado.
-     * Permite asignar sexo por primera vez si estaba en NULL (cría sin sexar).
+     * Permite asignar sexo o variedad por primera vez si estaban en NULL (cría pendiente, RF020).
      */
     public function updateForBreeder(int $id, array $data, int $idCriador): int|string {
         $payload = $this->filterAssignable($data);
@@ -406,19 +421,25 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Actualiza un canario con Modo de Corrección activo (SRS-RF031).
+     * Actualiza un canario con Modo de Corrección activo (SRS-RF031, SRS-RF033).
      *
-     * Permite modificar anillo y sexo dentro de una transacción. Si el sexo
-     * cambia y el ejemplar participa en parejas no anuladas, exige anularlas
-     * primero ($annulPairs = true) o reasignarlas antes de corregir.
+     * Reglas:
+     *  - Exige id_solicitud correspondiente a una solicitud en estado 'aprobada'
+     *    del mismo canario y criador que aún no haya sido aplicada.
+     *  - Solo permite modificar el único campo pedido en solicitud_correccion.dato_a_corregir
+     *    ('sexo' -> sexo, 'variedad' -> id_variedad). Rechaza cambios de anillo u otros campos.
+     *  - Cierra la solicitud de corrección y registra la auditoría en la misma transacción.
      *
      * @param array<string, mixed> $data
-     * @return array{previous: array<string, mixed>, updated: array<string, mixed>}|string
+     * @return array{previous: array<string, mixed>, updated: array<string, mixed>, tracked_new: array<string, mixed>}|string
      */
     public function updateWithCorrection(
         int $id,
         array $data,
         int $idCriador,
+        int $idSolicitud,
+        int $userId,
+        string $reason,
         bool $annulPairs = false
     ): array|string {
         $payload = $this->filterAssignable($data);
@@ -443,25 +464,61 @@ class Canary extends BaseModel {
                 return self::ERROR_NOT_FOUND;
             }
 
-            if ($payload === []) {
-                $this->commit();
-                $detailed = $this->findDetailed($id) ?? $current;
+            $request = $this->fetch(
+                'SELECT * FROM solicitud_correccion WHERE id_solicitud = :id_solicitud FOR UPDATE',
+                ['id_solicitud' => $idSolicitud]
+            );
 
-                return ['previous' => $current, 'updated' => $detailed];
-            }
-
-            $anillo = (string) ($payload['anillo'] ?? $current['anillo']);
-            $idClub = (int) ($payload['id_club'] ?? $current['id_club']);
-            $numeroSocio = (string) ($payload['numero_socio'] ?? $current['numero_socio']);
-            $temporada = (int) ($payload['temporada'] ?? $current['temporada']);
-
-            if ($this->anilloExists($anillo, $idClub, $numeroSocio, $temporada, $id)) {
+            if ($request === null) {
                 $this->rollBack();
 
-                return self::ERROR_CONFLICT_ANILLO;
+                return self::ERROR_REQUEST_NOT_FOUND;
             }
 
-            $sexChanged = array_key_exists('sexo', $payload)
+            if ((int) $request['id_criador'] !== $idCriador || (int) $request['id_canario'] !== $id) {
+                $this->rollBack();
+
+                return self::ERROR_REQUEST_MISMATCH;
+            }
+
+            if ($request['estado'] !== 'aprobada') {
+                $this->rollBack();
+
+                return self::ERROR_REQUEST_NOT_APPROVED;
+            }
+
+            $alreadyApplied = $this->fetch(
+                "SELECT 1 FROM auditoria WHERE id_solicitud = :id_solicitud AND accion = 'correccion' LIMIT 1",
+                ['id_solicitud' => $idSolicitud]
+            );
+
+            if ($alreadyApplied !== null) {
+                $this->rollBack();
+
+                return self::ERROR_REQUEST_ALREADY_CLOSED;
+            }
+
+            $requestedDato = (string) $request['dato_a_corregir'];
+            $allowedColumn = self::CORRECTION_FIELD_MAP[$requestedDato] ?? null;
+
+            if ($allowedColumn === null) {
+                $this->rollBack();
+
+                return self::ERROR_INVALID_DATA;
+            }
+
+            // En Modo de Corrección no se admite anillo ni ningún campo distinto al aprobado
+            if (
+                $payload === []
+                || !array_key_exists($allowedColumn, $payload)
+                || count($payload) !== 1
+            ) {
+                $this->rollBack();
+
+                return self::ERROR_CORRECTION_FIELD_MISMATCH;
+            }
+
+            $sexChanged = $allowedColumn === 'sexo'
                 && $current['sexo'] !== null
                 && $payload['sexo'] !== $current['sexo'];
 
@@ -501,6 +558,27 @@ class Canary extends BaseModel {
                 )
             );
 
+            // Cierra la solicitud de corrección fijando la marca de cierre definitiva (SRS-RF033)
+            $this->execute(
+                'UPDATE solicitud_correccion
+                    SET fecha_cierre = CURRENT_TIMESTAMP
+                  WHERE id_solicitud = :id_solicitud',
+                ['id_solicitud' => $idSolicitud]
+            );
+
+            AuditHelper::log(
+                action: 'correccion',
+                entity: 'canario',
+                recordId: $id,
+                previousValue: array_intersect_key($current, $payload),
+                newValue: $payload,
+                reason: $reason,
+                userId: $userId,
+                requestingBreederId: $idCriador,
+                requestId: $idSolicitud,
+                db: $this->getConnection()
+            );
+
             $this->commit();
         } catch (PDOException $exception) {
             $this->rollBack();
@@ -514,8 +592,9 @@ class Canary extends BaseModel {
         $updated = $this->findDetailed($id) ?? $current;
 
         return [
-            'previous' => $current,
-            'updated'  => $updated,
+            'previous'    => $current,
+            'updated'     => $updated,
+            'tracked_new' => $payload,
         ];
     }
 
@@ -630,6 +709,8 @@ class Canary extends BaseModel {
      * @param array<string, mixed> $data
      */
     private function validate(array $data, bool $isCreate): ?string {
+        $maxSeason = (int) date('Y');
+
         if ($isCreate) {
             foreach (self::ASSIGNABLE_FIELDS as $field) {
                 if (!array_key_exists($field, $data)) {
@@ -660,7 +741,7 @@ class Canary extends BaseModel {
 
         if (array_key_exists('temporada', $data)) {
             $temporada = $this->positiveInt($data['temporada']);
-            if ($temporada === null || $temporada < 1000 || $temporada > 9999) {
+            if ($temporada === null || $temporada < 1000 || $temporada > $maxSeason) {
                 return self::ERROR_INVALID_DATA;
             }
         }
@@ -712,11 +793,13 @@ class Canary extends BaseModel {
      * @return array{anillo: int, numero_socio: int, temporada: int}|null
      */
     private function normalizeRing(string $anillo, string $numeroSocio, int $temporada): ?array {
+        $maxSeason = (int) date('Y');
+
         if (
             preg_match('/^[0-9]{1,6}$/', $anillo) !== 1
             || preg_match('/^[0-9]{1,5}$/', $numeroSocio) !== 1
             || $temporada < 1000
-            || $temporada > 9999
+            || $temporada > $maxSeason
         ) {
             return null;
         }

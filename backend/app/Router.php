@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CanariApp\Backend;
 
 use Bramus\Router\Router as BramusRouter;
+use CanariApp\Backend\Controllers\AdminCatalogController;
 use CanariApp\Backend\Controllers\Api\WikiController;
 use CanariApp\Backend\Controllers\AuditController;
 use CanariApp\Backend\Controllers\AuthController;
@@ -82,6 +83,11 @@ final class Router {
         $this->router->post('/api/v1/admin/criadores', BreederController::class . '@store');
         $this->router->put('/api/v1/admin/criadores/(\d+)', BreederController::class . '@update');
 
+        // Gestión administrativa de catálogos oficiales (SRS-RF010, SRS-RF011, SRS-RF027)
+        $this->router->post('/api/v1/admin/nomenclador', AdminCatalogController::class . '@storeNomenclador');
+        $this->router->post('/api/v1/admin/clubes', AdminCatalogController::class . '@storeClub');
+        $this->router->post('/api/v1/admin/mutaciones', AdminCatalogController::class . '@storeMutacion');
+
         // Gestión administrativa de solicitudes de corrección (SRS-RF033)
         $this->router->get('/api/v1/admin/solicitudes-correccion', CorrectionRequestController::class . '@adminIndex');
         $this->router->get('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@adminShow');
@@ -99,10 +105,11 @@ final class Router {
         $this->router->get('/api/v1/admin/auditoria', AuditController::class . '@index');
         $this->router->get('/api/v1/admin/auditoria/(\d+)', AuditController::class . '@show');
 
-        // Gestión administrativa de respaldos con rotación de los 7 más recientes (DAT-003)
+        // Gestión administrativa de respaldos con rotación de los 7 más recientes y restauración (SRS-RF029, DAT-003)
         $this->router->get('/api/v1/admin/respaldos', BackupController::class . '@index');
         $this->router->get('/api/v1/admin/respaldos/(\d+)', BackupController::class . '@show');
         $this->router->post('/api/v1/admin/respaldos', BackupController::class . '@store');
+        $this->router->post('/api/v1/admin/respaldos/(\d+)/restaurar', BackupController::class . '@restore');
 
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');

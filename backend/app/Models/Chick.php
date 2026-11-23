@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace CanariApp\Backend\Models;
 
+use CanariApp\Backend\Helpers\AuditHelper;
+use PDO;
 use PDOException;
+use RuntimeException;
+use Throwable;
 
 /**
  * Modelo para la tabla "cria" y su relación con "nidada", "cruce", "pareja",
@@ -18,12 +22,13 @@ class Chick extends BaseModel {
     public const ERROR_INVALID_REFERENCE = 'invalid_reference';
     public const ERROR_NOT_FOUND = 'not_found';
     public const ERROR_CONFLICT = 'conflict';
+    public const ERROR_CONFLICT_ANILLO = 'conflict_anillo';
 
     protected string $table = 'cria';
     protected string $primaryKey = 'id_cria';
 
     /**
-     * Campos permitidos al crear una cría.
+     * Campos permitidos al crear una cría asociada a un canario existente.
      *
      * @var array<int, string>
      */
@@ -79,7 +84,7 @@ class Chick extends BaseModel {
             $boolVal = $this->parseBool($filters['reservada']);
             if ($boolVal !== null) {
                 $where[] = 'cr.reservada = :reservada';
-                $params['reservada'] = $boolVal;
+                $params['reservada'] = $boolVal ? 'true' : 'false';
             }
         }
 
@@ -119,7 +124,194 @@ class Chick extends BaseModel {
     }
 
     /**
-     * Registra una nueva cría asociada a una nidada y un canario del criadero.
+     * Crea el ejemplar en "canario" (permitiendo sexo y id_variedad en NULL según RF019/RF020)
+     * y su fila asociada en "cria" dentro de una única transacción atómica.
+     *
+     * Cumple el trigger diferido trg_validar_pendiente_cria de PostgreSQL v7.1.
+     *
+     * @param array<string, mixed> $canaryData
+     * @param array<string, mixed> $chickData
+     * @return int|string ID de la cría creada o código de error de dominio.
+     */
+    public function createWithCanaryForBreeder(
+        array $canaryData,
+        array $chickData,
+        int $idCriador,
+        int $userId
+    ): int|string {
+        $idNidada = $this->positiveInt($chickData['id_nidada'] ?? null);
+        if ($idNidada === null) {
+            return self::ERROR_INVALID_DATA;
+        }
+
+        $anillo = is_scalar($canaryData['anillo'] ?? null) ? trim((string) $canaryData['anillo']) : '';
+        $numeroSocio = is_scalar($canaryData['numero_socio'] ?? null) ? trim((string) $canaryData['numero_socio']) : '';
+        $idClub = $this->positiveInt($canaryData['id_club'] ?? null);
+        $temporada = $this->positiveInt($canaryData['temporada'] ?? null);
+        $maxSeason = (int) date('Y');
+
+        if (
+            preg_match('/^[0-9]{1,6}$/', $anillo) !== 1
+            || preg_match('/^[0-9]{1,5}$/', $numeroSocio) !== 1
+            || $idClub === null
+            || $temporada === null
+            || $temporada < 1000
+            || $temporada > $maxSeason
+        ) {
+            return self::ERROR_INVALID_DATA;
+        }
+
+        $sexo = null;
+        if (array_key_exists('sexo', $canaryData) && $canaryData['sexo'] !== null && $canaryData['sexo'] !== '') {
+            if (!is_string($canaryData['sexo']) || !in_array($canaryData['sexo'], ['M', 'H'], true)) {
+                return self::ERROR_INVALID_DATA;
+            }
+            $sexo = $canaryData['sexo'];
+        }
+
+        $idVariedad = null;
+        if (array_key_exists('id_variedad', $canaryData) && $canaryData['id_variedad'] !== null && $canaryData['id_variedad'] !== '') {
+            $parsedVariedad = $this->positiveInt($canaryData['id_variedad']);
+            if ($parsedVariedad === null) {
+                return self::ERROR_INVALID_DATA;
+            }
+            $idVariedad = $parsedVariedad;
+        }
+
+        $factorGenetico = null;
+        if (array_key_exists('factor_genetico', $chickData) && $chickData['factor_genetico'] !== null && $chickData['factor_genetico'] !== '') {
+            $parsedFactor = $this->positiveInt($chickData['factor_genetico']);
+            if ($parsedFactor === null) {
+                return self::ERROR_INVALID_DATA;
+            }
+            $factorGenetico = $parsedFactor;
+        }
+
+        $reservada = false;
+        if (array_key_exists('reservada', $chickData) && $chickData['reservada'] !== null && $chickData['reservada'] !== '') {
+            $parsedBool = $this->parseBool($chickData['reservada']);
+            if ($parsedBool === null) {
+                return self::ERROR_INVALID_DATA;
+            }
+            $reservada = $parsedBool;
+        }
+
+        try {
+            $this->beginTransaction();
+
+            $nest = $this->fetch(
+                'SELECT n.id_nidada
+                   FROM nidada n
+                   INNER JOIN cruce c ON c.id_cruce = n.id_cruce
+                   INNER JOIN pareja p ON p.id_pareja = c.id_pareja
+                  WHERE n.id_nidada = :id_nidada
+                    AND p.id_criador = :id_criador
+                  LIMIT 1',
+                ['id_nidada' => $idNidada, 'id_criador' => $idCriador]
+            );
+
+            if ($nest === null) {
+                $this->rollBack();
+
+                return self::ERROR_NOT_FOUND;
+            }
+
+            $ringConflict = $this->fetch(
+                'SELECT 1
+                   FROM canario
+                  WHERE anillo::INT = :anillo
+                    AND id_club = :id_club
+                    AND numero_socio::INT = :numero_socio
+                    AND temporada = :temporada
+                  LIMIT 1',
+                [
+                    'anillo'       => (int) $anillo,
+                    'id_club'      => $idClub,
+                    'numero_socio' => (int) $numeroSocio,
+                    'temporada'    => $temporada,
+                ]
+            );
+
+            if ($ringConflict !== null) {
+                $this->rollBack();
+
+                return self::ERROR_CONFLICT_ANILLO;
+            }
+
+            $canaryPayload = [
+                'anillo'       => $anillo,
+                'id_club'      => $idClub,
+                'numero_socio' => $numeroSocio,
+                'temporada'    => $temporada,
+                'sexo'         => $sexo,
+                'id_variedad'  => $idVariedad,
+                'id_criador'   => $idCriador,
+            ];
+
+            $newCanaryId = AuditHelper::withoutAutoAudit(
+                fn (): ?int => $this->insertInto('canario', $canaryPayload, 'id_canario')
+            );
+
+            if ($newCanaryId === null) {
+                throw new RuntimeException('No se pudo obtener el ID del ejemplar creado para la cría.');
+            }
+
+            $chickPayload = [
+                'id_nidada'       => $idNidada,
+                'id_canario'      => $newCanaryId,
+                'factor_genetico' => $factorGenetico,
+                'reservada'       => $reservada,
+            ];
+
+            $newChickId = AuditHelper::withoutAutoAudit(
+                fn (): ?int => $this->insertInto('cria', $chickPayload, 'id_cria')
+            );
+
+            if ($newChickId === null) {
+                throw new RuntimeException('No se pudo obtener el ID de la cría creada.');
+            }
+
+            $conn = $this->getConnection();
+
+            AuditHelper::log(
+                action: 'insert',
+                entity: 'canario',
+                recordId: $newCanaryId,
+                newValue: $canaryPayload,
+                reason: 'Registro de ejemplar asociado a nueva cría',
+                userId: $userId,
+                db: $conn
+            );
+
+            AuditHelper::log(
+                action: 'insert',
+                entity: 'cria',
+                recordId: $newChickId,
+                newValue: $chickPayload,
+                reason: 'Registro de nueva cría en nidada',
+                userId: $userId,
+                db: $conn
+            );
+
+            $this->commit();
+
+            return $newChickId;
+        } catch (PDOException $exception) {
+            if ($this->getConnection()->inTransaction()) {
+                $this->rollBack();
+            }
+
+            return $this->mapWriteException($exception, true);
+        } catch (Throwable $exception) {
+            if ($this->getConnection()->inTransaction()) {
+                $this->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    /**
+     * Registra una nueva cría asociada a una nidada y un canario ya existente del criadero.
      *
      * @param array<string, mixed> $data
      * @return int|string ID generado o código de error de dominio.
@@ -187,12 +379,12 @@ class Chick extends BaseModel {
         }
 
         try {
-            $id = $this->insert([
+            $id = $this->insertInto('cria', [
                 'id_nidada'       => $id_nidada,
                 'id_canario'      => $id_canario,
                 'factor_genetico' => $factorGenetico,
                 'reservada'       => $reservada,
-            ]);
+            ], 'id_cria');
         } catch (PDOException $exception) {
             return $this->mapWriteException($exception);
         }
@@ -246,10 +438,66 @@ class Chick extends BaseModel {
         }
 
         try {
-            return $this->update($id_cria, $updates);
+            $setClauses = [];
+            foreach (array_keys($updates) as $column) {
+                $setClauses[] = $this->quoteIdentifier($column) . ' = :' . $column;
+            }
+
+            $sql = sprintf(
+                'UPDATE %s SET %s WHERE id_cria = :id_cria',
+                $this->quoteIdentifier($this->table),
+                implode(', ', $setClauses)
+            );
+
+            $stmt = $this->getConnection()->prepare($sql);
+            foreach ($updates as $column => $value) {
+                $stmt->bindValue(':' . $column, $value, $this->pdoParamType($value));
+            }
+            $stmt->bindValue(':id_cria', $id_cria, PDO::PARAM_INT);
+            $stmt->execute();
+
+            return $stmt->rowCount();
         } catch (PDOException $exception) {
             return $this->mapWriteException($exception);
         }
+    }
+
+    /**
+     * Inserta un registro en la tabla indicada devolviendo su clave primaria mediante RETURNING.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function insertInto(string $table, array $data, string $returningColumn): ?int {
+        $columns = array_keys($data);
+        $quotedColumns = array_map(fn (string $col): string => $this->quoteIdentifier($col), $columns);
+        $placeholders = array_map(fn (string $col): string => ':' . $col, $columns);
+
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s) RETURNING %s',
+            $this->quoteIdentifier($table),
+            implode(', ', $quotedColumns),
+            implode(', ', $placeholders),
+            $this->quoteIdentifier($returningColumn)
+        );
+
+        $stmt = $this->getConnection()->prepare($sql);
+        foreach ($data as $column => $value) {
+            $stmt->bindValue(':' . $column, $value, $this->pdoParamType($value));
+        }
+
+        $stmt->execute();
+        $id = $stmt->fetchColumn();
+
+        return $id !== false ? (int) $id : null;
+    }
+
+    private function pdoParamType(mixed $value): int {
+        return match (true) {
+            is_bool($value) => PDO::PARAM_BOOL,
+            is_int($value)  => PDO::PARAM_INT,
+            $value === null => PDO::PARAM_NULL,
+            default         => PDO::PARAM_STR,
+        };
     }
 
     /**
@@ -313,12 +561,18 @@ class Chick extends BaseModel {
     /**
      * Traduce códigos SQLSTATE de PostgreSQL a códigos de error de dominio.
      */
-    private function mapWriteException(PDOException $exception): string {
+    private function mapWriteException(PDOException $exception, bool $creatingCanary = false): string {
+        $message = $exception->getMessage();
+
+        if ($creatingCanary && (string) $exception->getCode() === '23505' && str_contains($message, 'uq_anillo')) {
+            return self::ERROR_CONFLICT_ANILLO;
+        }
+
         return match ((string) $exception->getCode()) {
             '23505' => self::ERROR_CONFLICT,
             '23503' => self::ERROR_INVALID_REFERENCE,
             '23502', '23514', '22P02', '22007' => self::ERROR_INVALID_DATA,
-            'P0001' => self::ERROR_CONFLICT,
+            'P0001' => self::ERROR_INVALID_DATA,
             default => throw $exception,
         };
     }
