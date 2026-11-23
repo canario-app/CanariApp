@@ -742,9 +742,107 @@ La gestión de crías está disponible para el usuario autenticado con rol `cria
 
 No se implementa `DELETE` para crías. El SRS 1.2 excluye la eliminación física general de registros, y la BD v7.1 hace inmutables `id_nidada` e `id_canario` en `cria`.
 
+## Gestión de títulos
+
+La gestión de títulos de competencia está disponible para el usuario autenticado con rol `criador` y queda limitada a los ejemplares de su propio criadero (SRS-RF023, SEG-001). Los títulos se registran sobre el anillo de un ejemplar ya registrado; si el anillo no existe en el criadero, el registro se rechaza.
+
+La tabla `titulo` de la BD v7.1 contiene `id_titulo` (generado por la BD), `id_canario`, `nombre` (obligatorio, hasta 100 caracteres, no vacío) y `fecha` (obligatoria, `YYYY-MM-DD`, no posterior a la fecha actual). Existe la restricción `uq_titulo (id_canario, nombre, fecha)` y el trigger `trg_titulo_canario_inmutable`: el ejemplar de un título no se puede cambiar.
+
+### Objeto `titulo`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_titulo` | entero | `titulo.id_titulo`, generado por la BD |
+| `id_canario` | entero | `titulo.id_canario`, ejemplar ganador |
+| `nombre` | texto (1–100 caracteres) | `titulo.nombre` |
+| `fecha` | fecha (`YYYY-MM-DD`) | `titulo.fecha` |
+| `anillo` | texto | `canario.anillo`, dato relacionado de consulta |
+| `numero_socio` | texto | `canario.numero_socio`, dato relacionado de consulta |
+| `temporada` | entero | `canario.temporada`, dato relacionado de consulta |
+| `sexo` | `"M"`, `"H"` o `null` | `canario.sexo`, dato relacionado de consulta |
+| `id_club` | entero | `club.id_club`, dato relacionado de consulta |
+| `club_sigla` | texto | `club.sigla`, dato relacionado de consulta |
+| `id_criador` | entero | `canario.id_criador`, dato relacionado de consulta |
+
+### 1. Listar títulos
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/titulos` |
+| Quién puede usarla | Criador autenticado; solo devuelve títulos de su criadero |
+| Filtros opcionales | `id_canario`, `nombre` (coincidencia parcial), `fecha` |
+| Ejemplo | `GET /api/v1/titulos?id_canario=12` |
+| Respuesta | `200` con `data` = lista de objetos `titulo`, ordenada por fecha descendente |
+| Errores esperados | `401`, `403`, `404` perfil de criador inexistente, `500` |
+
+### 2. Listar títulos de un ejemplar
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/titulos/canario/{id}` |
+| Quién puede usarla | Criador autenticado; el ejemplar debe pertenecer a su criadero |
+| Campos | `{id}` es `id_canario`, entero positivo |
+| Ejemplo | `GET /api/v1/titulos/canario/12` |
+| Respuesta | `200` con `data` = lista de títulos del ejemplar (lista vacía si no tiene) |
+| Errores esperados | `400` ID inválido, `401`, `403`, `500` |
+
+### 3. Ver detalle de un título
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/titulos/{id}` |
+| Quién puede usarla | Criador autenticado; solo puede consultar títulos de su criadero |
+| Campos | `{id}` es `id_titulo`, entero positivo |
+| Ejemplo | `GET /api/v1/titulos/8` |
+| Respuesta | `200` con `data` = objeto `titulo` |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404`, `500` |
+
+### 4. Registrar un título
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/titulos` |
+| Quién puede usarla | Criador autenticado |
+| Campos obligatorios | `nombre` (texto de 1 a 100 caracteres), `fecha` (`YYYY-MM-DD` no futura) y el ejemplar, indicado con `id_canario` (entero positivo) **o** con el anillo completo (`anillo`, `id_club`, `numero_socio`, `temporada`) |
+| Campos no aceptados | `id_titulo`, `id_criador` |
+| Ejemplo de petición | `{"id_canario": 12, "nombre": "Campeón Nacional", "fecha": "2026-10-15"}` |
+| Ejemplo con anillo | `{"anillo": "2901", "id_club": 4, "numero_socio": "456", "temporada": 2026, "nombre": "Campeón Nacional", "fecha": "2026-10-15"}` |
+| Respuesta | `201` con `data` = objeto `titulo` creado |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `409` título duplicado, `422` nombre/fecha/anillo inválidos o ejemplar ajeno, `500` |
+| Reglas de validación | El ejemplar debe existir en el criadero autenticado (SRS-RF023). Si se envían ambos, `id_canario` tiene prioridad sobre el anillo. No se permite repetir `(id_canario, nombre, fecha)` (`uq_titulo`). |
+
+### 5. Actualizar un título
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `PUT` o `PATCH /api/v1/titulos/{id}` |
+| Quién puede usarla | Criador autenticado; solo sobre títulos de su criadero |
+| Campos opcionales | `nombre`, `fecha` (se validan con las mismas reglas del registro) |
+| Campos no permitidos | `id_titulo`, `id_criador`, `id_canario`, `anillo`, `id_club`, `numero_socio`, `temporada` |
+| Ejemplo de petición | `PATCH /api/v1/titulos/8` con `{"nombre": "Campeón Regional 2026"}` |
+| Respuesta | `200` con `data` = objeto `titulo` actualizado |
+| Errores esperados | `400` ID/JSON inválido o sin campos editables, `401`, `403`, `404`, `409` título duplicado, `422` validación, `500` |
+| Reglas de validación | `id_canario` es inmutable (`trg_titulo_canario_inmutable`); intentar cambiarlo responde `422`. |
+
+### 6. Consultar la descendencia de un ejemplar ganador
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/titulos/canario/{id}/descendencia` |
+| Quién puede usarla | Criador autenticado; el ejemplar debe pertenecer a su criadero |
+| Campos | `{id}` es `id_canario`, entero positivo |
+| Ejemplo | `GET /api/v1/titulos/canario/12/descendencia` |
+| Respuesta | `200` con `data` = `{"id_canario": 12, "tiene_titulos": true, "grupos": [...]}`; cada grupo trae el ejemplar con que se cruzó y su lista de `crias` |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404` ejemplar ajeno o inexistente, `422` ejemplar sin sexo registrado, `500` |
+| Reglas de validación | SRS-RF024: se agrupa por la hembra si el ganador es macho y por el macho si es hembra. Si el ejemplar no tiene títulos, `tiene_titulos` es `false` y `grupos` está vacío; si no tiene crías, se devuelve `grupos: []` y un mensaje explícito. Ninguno de los dos casos es un error HTTP. |
+
+### Alcance de esta versión
+
+No se implementa `DELETE` para títulos. El SRS exige conservar el historial al menos hasta el 31/12/2028 (DAT-002) y la BD v7.1 concede `SELECT, INSERT, UPDATE` sobre `titulo`, pero no `DELETE`. Tampoco se expone una entidad `concurso` separada: la BD v7.1 modela el concurso dentro de `titulo.nombre`.
+
 ## Pendiente de coordinar
 
 - Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
-- Avisar a Frontend que se incorporaron los endpoints de `cría` (`/api/v1/crias`) además de `pareja`, `cruce` y `nidada`.
+- Avisar a Frontend que se incorporaron los endpoints de `cría` (`/api/v1/crias`) y de `título` (`/api/v1/titulos`, incluida la descendencia de un ganador) además de `pareja`, `cruce` y `nidada`.
 
 Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
