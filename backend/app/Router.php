@@ -6,7 +6,9 @@ namespace CanariApp\Backend;
 
 use Bramus\Router\Router as BramusRouter;
 use CanariApp\Backend\Controllers\Api\WikiController;
+use CanariApp\Backend\Controllers\AuditController;
 use CanariApp\Backend\Controllers\AuthController;
+use CanariApp\Backend\Controllers\BackupController;
 use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\CanaryController;
@@ -92,6 +94,15 @@ final class Router {
         $this->router->post('/api/v1/admin/modo-operacion', OperationModeController::class . '@activate');
         $this->router->patch('/api/v1/admin/modo-operacion/(\d+)/diagnostico', OperationModeController::class . '@diagnose');
         $this->router->patch('/api/v1/admin/modo-operacion/(\d+)/desactivar', OperationModeController::class . '@deactivate');
+
+        // Consulta administrativa de auditoría (SEG-003, solo lectura)
+        $this->router->get('/api/v1/admin/auditoria', AuditController::class . '@index');
+        $this->router->get('/api/v1/admin/auditoria/(\d+)', AuditController::class . '@show');
+
+        // Gestión administrativa de respaldos con rotación de los 7 más recientes (DAT-003)
+        $this->router->get('/api/v1/admin/respaldos', BackupController::class . '@index');
+        $this->router->get('/api/v1/admin/respaldos/(\d+)', BackupController::class . '@show');
+        $this->router->post('/api/v1/admin/respaldos', BackupController::class . '@store');
 
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
