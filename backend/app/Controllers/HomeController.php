@@ -107,6 +107,15 @@ class HomeController {
                     'GET /api/v1/simulaciones/{id}',
                     'POST /api/v1/simulaciones',
                 ],
+                'titles' => [
+                    'GET /api/v1/titulos',
+                    'GET /api/v1/titulos/canario/{id}',
+                    'GET /api/v1/titulos/canario/{id}/descendencia',
+                    'GET /api/v1/titulos/{id}',
+                    'POST /api/v1/titulos',
+                    'PUT /api/v1/titulos/{id}',
+                    'PATCH /api/v1/titulos/{id}',
+                ],
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',

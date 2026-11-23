@@ -14,6 +14,7 @@ use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\MatingController;
 use CanariApp\Backend\Controllers\NestController;
 use CanariApp\Backend\Controllers\PairController;
+use CanariApp\Backend\Controllers\TitleController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Controllers\ChickController;
@@ -110,7 +111,14 @@ final class Router {
         $this->router->put('/api/v1/crias/(\d+)', ChickController::class . '@update');
         $this->router->patch('/api/v1/crias/(\d+)', ChickController::class . '@update');
 
-        
+        // Títulos de competencia: el ejemplar es inmutable; sin borrado físico (SRS-RF023/024)
+        $this->router->get('/api/v1/titulos', TitleController::class . '@index');
+        $this->router->get('/api/v1/titulos/canario/(\d+)/descendencia', TitleController::class . '@offspring');
+        $this->router->get('/api/v1/titulos/canario/(\d+)', TitleController::class . '@byCanary');
+        $this->router->get('/api/v1/titulos/(\d+)', TitleController::class . '@show');
+        $this->router->post('/api/v1/titulos', TitleController::class . '@store');
+        $this->router->put('/api/v1/titulos/(\d+)', TitleController::class . '@update');
+        $this->router->patch('/api/v1/titulos/(\d+)', TitleController::class . '@update');
 
         // Simulación genética: consulta e historial por criadero; sin edición ni borrado físico
         $this->router->get('/api/v1/simulaciones', SimulationController::class . '@index');
