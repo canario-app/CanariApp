@@ -15,9 +15,15 @@ $esAdmin = ($_SESSION['usuario']['rol'] ?? '') === 'administrador';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <meta name="theme-color" content="#ffffff">
 </head>
 <body>
   <header class="topbar">
+    <button type="button" class="menu-btn" aria-label="Abrir menú" aria-expanded="false"
+      onclick="this.setAttribute('aria-expanded', document.body.classList.toggle('menu-abierto'))">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Menú
+    </button>
     <div class="marca">
       <div class="marca-logo"><img src="img/logo.svg" width="24" height="24" alt=""></div>
       <div>

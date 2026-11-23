@@ -57,7 +57,7 @@ $tarjetas = [
 <footer class="pie">
   <span>CanariApp · Registro de crianza de canarios de competencia</span>
   
-  <a href="contacto.php">[Contacto del administrador]</a>
+  <a href="contacto.php">Contactar al administrador</a>
 </footer>
 
 <div class="modal" id="como-funciona">
