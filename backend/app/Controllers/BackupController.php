@@ -9,6 +9,7 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Helpers\Sanitizer;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Backup;
+use CanariApp\Backend\Models\OperationMode;
 use RuntimeException;
 use Throwable;
 
@@ -156,6 +157,11 @@ class BackupController {
     /**
      * [Admin] Restaura la base de datos a partir de un respaldo registrado (SRS-RF029).
      * POST /api/v1/admin/respaldos/{id}/restaurar
+     *
+     * Reglas:
+     *  - Rechaza la operación en modo normal; solo se permite en mantenimiento o emergencia.
+     *  - Ejecuta psql usando el usuario dueño de las tablas (DB_RESTORE_USER / postgres)
+     *    sin otorgar permisos de borrado al usuario de aplicación (canariapp).
      */
     public function restore(int|string $id): void {
         $adminUserId = $this->ensureAdminRole();
@@ -177,6 +183,14 @@ class BackupController {
             : sprintf('Restauración de base de datos desde respaldo #%d (RF029)', $idRespaldo);
 
         try {
+            $activeMode = (new OperationMode())->findActive();
+            if ($activeMode === null) {
+                ResponseHelper::conflict(
+                    'No se puede restaurar un respaldo en modo normal. Active primero el modo mantenimiento o emergencia (RF029).'
+                );
+                return;
+            }
+
             $backup = $this->backupModel->findDetailed($idRespaldo);
             if ($backup === null) {
                 ResponseHelper::notFound('Respaldo no encontrado.');
@@ -195,7 +209,7 @@ class BackupController {
 
             if (!$this->restorePhysicalDump($targetPath)) {
                 ResponseHelper::internalError(
-                    'No se pudo restaurar el respaldo mediante psql; verifique la integridad del archivo SQL.'
+                    'No se pudo restaurar el respaldo mediante psql; verifique las credenciales de propietario (DB_RESTORE_USER) y la integridad del archivo SQL.'
                 );
                 return;
             }
@@ -205,16 +219,18 @@ class BackupController {
                 entity: 'respaldo',
                 recordId: $idRespaldo,
                 newValue: [
-                    'id_respaldo' => $idRespaldo,
-                    'archivo'     => $safeName,
+                    'id_respaldo'    => $idRespaldo,
+                    'archivo'        => $safeName,
+                    'modo_operacion' => (string) $activeMode['modo'],
                 ],
                 reason: $motivo,
                 userId: $adminUserId
             );
 
             ResponseHelper::success([
-                'respaldo'   => $backup,
-                'restaurado' => true,
+                'respaldo'       => $backup,
+                'modo_operacion' => (string) $activeMode['modo'],
+                'restaurado'     => true,
             ], 'Respaldo restaurado exitosamente.');
         } catch (Throwable) {
             ResponseHelper::internalError('No se pudo completar la restauración del respaldo.');
@@ -326,7 +342,7 @@ class BackupController {
 
     /**
      * Genera el volcado SQL mediante pg_dump en storage/backups/ con --clean --if-exists
-     * para garantizar su restaurabilidad (SRS-RF029).
+     * conservando privilegios (GRANT) para garantizar una restauración íntegra (SRS-RF029).
      */
     private function createPhysicalDump(string $fileName): bool {
         if (!function_exists('exec')) {
@@ -349,7 +365,7 @@ class BackupController {
         }
 
         $command = sprintf(
-            'PGPASSWORD=%s pg_dump -h %s -p %s -U %s -F p --clean --if-exists --no-owner --no-privileges -f %s %s 2>/dev/null',
+            'PGPASSWORD=%s pg_dump -h %s -p %s -U %s -F p --clean --if-exists --no-owner -f %s %s 2>/dev/null',
             escapeshellarg($db['pass']),
             escapeshellarg($db['host']),
             escapeshellarg($db['port']),
@@ -374,14 +390,15 @@ class BackupController {
     }
 
     /**
-     * Restaura un archivo SQL de respaldo en PostgreSQL mediante psql (SRS-RF029).
+     * Restaura un archivo SQL de respaldo en PostgreSQL mediante psql usando
+     * el usuario propietario de las tablas (DB_RESTORE_USER / postgres) (SRS-RF029).
      */
     private function restorePhysicalDump(string $targetPath): bool {
         if (!function_exists('exec') || !is_file($targetPath)) {
             return false;
         }
 
-        $db = $this->databaseCredentials();
+        $db = $this->restoreDatabaseCredentials();
         if ($db === null) {
             return false;
         }
@@ -423,16 +440,18 @@ class BackupController {
     }
 
     /**
+     * Credenciales de aplicación para generación de volcados (pg_dump).
+     *
      * @return array{host: string, port: string, name: string, user: string, pass: string}|null
      */
     private function databaseCredentials(): ?array {
-        $dbHost = (string) ($_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: '');
-        $dbPort = (string) ($_ENV['DB_PORT'] ?? getenv('DB_PORT') ?: '5432');
-        $dbName = (string) ($_ENV['DB_NAME'] ?? $_ENV['DB_DATABASE'] ?? getenv('DB_NAME') ?: '');
-        $dbUser = (string) ($_ENV['DB_USER'] ?? $_ENV['DB_USERNAME'] ?? getenv('DB_USER') ?: '');
-        $dbPass = (string) ($_ENV['DB_PASS'] ?? $_ENV['DB_PASSWORD'] ?? getenv('DB_PASS') ?: '');
+        $dbHost = $this->envValue(['DB_HOST']);
+        $dbPort = $this->envValue(['DB_PORT']) ?? '5432';
+        $dbName = $this->envValue(['DB_NAME', 'DB_DATABASE']);
+        $dbUser = $this->envValue(['DB_USER', 'DB_USERNAME']);
+        $dbPass = $this->envValue(['DB_PASS', 'DB_PASSWORD']) ?? '';
 
-        if ($dbHost === '' || $dbName === '' || $dbUser === '') {
+        if ($dbHost === null || $dbName === null || $dbUser === null) {
             return null;
         }
 
@@ -443,6 +462,44 @@ class BackupController {
             'user' => $dbUser,
             'pass' => $dbPass,
         ];
+    }
+
+    /**
+     * Credenciales del usuario propietario de las tablas (por defecto postgres)
+     * utilizadas exclusivamente al restaurar respaldos (SRS-RF029).
+     *
+     * @return array{host: string, port: string, name: string, user: string, pass: string}|null
+     */
+    private function restoreDatabaseCredentials(): ?array {
+        $base = $this->databaseCredentials();
+        if ($base === null) {
+            return null;
+        }
+
+        $ownerUser = $this->envValue(['DB_RESTORE_USER', 'POSTGRES_USER']) ?? 'postgres';
+        $ownerPass = $this->envValue(['DB_RESTORE_PASS', 'POSTGRES_PASSWORD']) ?? $base['pass'];
+
+        return [
+            'host' => $base['host'],
+            'port' => $base['port'],
+            'name' => $base['name'],
+            'user' => $ownerUser,
+            'pass' => $ownerPass,
+        ];
+    }
+
+    /**
+     * @param array<int, string> $keys
+     */
+    private function envValue(array $keys): ?string {
+        foreach ($keys as $key) {
+            $val = $_ENV[$key] ?? getenv($key);
+            if (is_string($val) && trim($val) !== '') {
+                return trim($val);
+            }
+        }
+
+        return null;
     }
 
     /**

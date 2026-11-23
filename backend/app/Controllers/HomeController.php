@@ -35,7 +35,7 @@ class HomeController {
     }
 
     /**
-     * Devuelve el índice general de endpoints disponibles en la versión  .
+     * Devuelve el índice general de endpoints disponibles en la versión v1.
      */
     public function v1(): void {
         ResponseHelper::success([
@@ -50,25 +50,25 @@ class HomeController {
                 'session' => [
                     'GET /api/v1/me',
                     'POST /api/v1/logout',
+                    'GET /api/v1/modo-operacion/estado',
                 ],
                 'breeder_profile' => [
                     'GET /api/v1/criador/perfil',
                     'PUT /api/v1/criador/perfil',
                 ],
-                'admin_breeders' => [
-                    'GET /api/v1/admin/criadores',
-                    'GET /api/v1/admin/criadores/{id}',
-                    'POST /api/v1/admin/criadores',
-                    'POST /api/v1/admin/register',
-                    'PUT /api/v1/admin/criadores/{id}',
-                    'DELETE /api/v1/admin/criadores/{id}',
-                ],
                 'canaries' => [
                     'GET /api/v1/canarios',
                     'GET /api/v1/canarios/{id}',
+                    'GET /api/v1/canarios/{id}/ascendencia',
                     'POST /api/v1/canarios',
                     'PUT /api/v1/canarios/{id}',
                     'PATCH /api/v1/canarios/{id}',
+                ],
+                'correction_requests' => [
+                    'GET /api/v1/solicitudes-correccion',
+                    'GET /api/v1/solicitudes-correccion/{id}',
+                    'POST /api/v1/solicitudes-correccion',
+                    'PATCH /api/v1/solicitudes-correccion/{id}/cancelar',
                 ],
                 'cages' => [
                     'GET /api/v1/jaulas',
@@ -98,14 +98,10 @@ class HomeController {
                     'GET /api/v1/crias',
                     'GET /api/v1/crias/nidada/{id}',
                     'GET /api/v1/crias/{id}',
+                    'GET /api/v1/crias/{id}/ascendencia',
                     'POST /api/v1/crias',
                     'PUT /api/v1/crias/{id}',
                     'PATCH /api/v1/crias/{id}',
-                ],
-                'simulations' => [
-                    'GET /api/v1/simulaciones',
-                    'GET /api/v1/simulaciones/{id}',
-                    'POST /api/v1/simulaciones',
                 ],
                 'titles' => [
                     'GET /api/v1/titulos',
@@ -116,6 +112,11 @@ class HomeController {
                     'PUT /api/v1/titulos/{id}',
                     'PATCH /api/v1/titulos/{id}',
                 ],
+                'simulations' => [
+                    'GET /api/v1/simulaciones',
+                    'GET /api/v1/simulaciones/{id}',
+                    'POST /api/v1/simulaciones',
+                ],
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',
@@ -123,6 +124,32 @@ class HomeController {
                     'GET /api/v1/wiki/variedades/codigo/{codigo}',
                     'GET /api/v1/wiki/variedades/{id}',
                     'GET /api/v1/wiki/mutaciones',
+                ],
+                'admin' => [
+                    'GET /api/v1/admin/criadores',
+                    'GET /api/v1/admin/criadores/{id}',
+                    'POST /api/v1/admin/criadores',
+                    'POST /api/v1/admin/register',
+                    'PUT /api/v1/admin/criadores/{id}',
+                    'GET /api/v1/admin/solicitudes-correccion',
+                    'GET /api/v1/admin/solicitudes-correccion/{id}',
+                    'PATCH /api/v1/admin/solicitudes-correccion/{id}',
+                    'PATCH /api/v1/admin/canarios/{id}',
+                    'GET /api/v1/admin/modo-operacion',
+                    'GET /api/v1/admin/modo-operacion/activo',
+                    'GET /api/v1/admin/modo-operacion/{id}',
+                    'POST /api/v1/admin/modo-operacion',
+                    'PATCH /api/v1/admin/modo-operacion/{id}/diagnostico',
+                    'PATCH /api/v1/admin/modo-operacion/{id}/desactivar',
+                    'GET /api/v1/admin/auditoria',
+                    'GET /api/v1/admin/auditoria/{id}',
+                    'GET /api/v1/admin/respaldos',
+                    'GET /api/v1/admin/respaldos/{id}',
+                    'POST /api/v1/admin/respaldos',
+                    'POST /api/v1/admin/respaldos/{id}/restaurar',
+                    'POST /api/v1/admin/nomenclador',
+                    'POST /api/v1/admin/clubes',
+                    'POST /api/v1/admin/mutaciones',
                 ],
             ],
         ], 'Índice de endpoints de CanariApp API v1.');

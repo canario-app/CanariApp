@@ -48,8 +48,12 @@ services:
       DB_NAME: canariapp_db
       DB_USER: canariapp
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_RESTORE_USER: postgres
+      DB_RESTORE_PASS: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
       JWT_EXPIRATION: "1800"
+    volumes:
+      - canariapp_backups:/var/www/app/storage/backups
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8081}:80"
     depends_on:
@@ -79,3 +83,4 @@ services:
 
 volumes:
   canariapp_pg:
+  canariapp_backups:
