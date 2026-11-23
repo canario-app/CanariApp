@@ -10,6 +10,8 @@ Esta carpeta contiene la versión 7.1 del modelo de datos de CanariApp: el esque
 | `canarios_v7_1.sql` | Crea la base de datos | Siempre; es el archivo principal |
 | `permisos_v7_1.sql` | Da permisos al usuario con que se conecta PHP | Después de crear la base |
 | `pruebas_v7_1.sql` | Comprueba que las reglas funcionan | Después de cada cambio al esquema |
+| `catalogo/seeds/variedad_2026_v7_1.sql` | Carga el nomenclador 2026 (2.661 variedades) | En la base que usa la app, después de los permisos |
+| `admin_inicial_v7_1.sql` | Crea el primer usuario administrador | En la base que usa la app, una sola vez |
 | `MER_canarios_v7_1.drawio` | Diagrama entidad-relación | Para entender y presentar el modelo |
 | `Cambios_v7_1.md` | Qué cambió respecto a la v7 y por qué | Para quien revisa o ya conocía la v7 |
 
@@ -26,6 +28,39 @@ psql -v ON_ERROR_STOP=1 -d canariapp_test -f pruebas_v7_1.sql ; echo "salida=$?"
 ```
 
 `-v ON_ERROR_STOP=1` hace que `psql` se detenga en el primer error en vez de seguir. Si la última línea imprime `salida=0`, todo pasó.
+
+### Base que usa la aplicación
+
+Requiere PostgreSQL 15 o superior. La base es la de `DB_NAME` en el `.env` del backend, y el rol `canariapp` debe existir con la misma contraseña que `DB_PASSWORD`. Desde esta carpeta:
+
+```sh
+psql -v ON_ERROR_STOP=1 -d canariapp_db -f canarios_v7_1.sql
+psql -v ON_ERROR_STOP=1 -d canariapp_db -f permisos_v7_1.sql
+psql -v ON_ERROR_STOP=1 -d canariapp_db -f catalogo/seeds/variedad_2026_v7_1.sql
+psql -d canariapp_db -v correo=admin@canariapp.cl -f admin_inicial_v7_1.sql
+```
+
+No se ejecutan `pruebas_v7_1.sql` ni `reset_dev_v7_1.sql` en esta base.
+
+---
+
+## `admin_inicial_v7_1.sql`
+
+La base parte sin usuarios y la API no puede crear el primer administrador. Este script lo crea sin necesitar PHP:
+
+- Pide la contraseña al ejecutarse (mínimo 8 caracteres), así no queda escrita en ningún archivo ni en el historial.
+- Guarda un hash bcrypt hecho con la extensión `pgcrypto`. El login de PHP (`password_verify`) lo acepta igual que uno hecho con `password_hash`.
+- El nombre es opcional (`-v nombre='María Pérez'`); por defecto es «Administrador».
+- Si ya hay un usuario con ese correo, no cambia nada. Se puede repetir sin riesgo.
+
+Usa comandos de `psql` (`\prompt`, `\if`), así que no funciona en el **Query Tool** de pgAdmin. Ahí se usa la **PSQL Tool** de pgAdmin, o esta consulta, cambiando el correo y la contraseña (y sin guardarla en ningún archivo):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+INSERT INTO usuario (nombre, correo, password_hash, rol)
+VALUES ('Administrador', 'admin@canariapp.cl',
+        crypt('CAMBIAR_CONTRASEÑA', gen_salt('bf', 10)), 'administrador');
+```
 
 ---
 
