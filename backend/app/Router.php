@@ -16,6 +16,7 @@ use CanariApp\Backend\Controllers\NestController;
 use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
+use CanariApp\Backend\Controllers\ChickController;
 
 final class Router {
     private BramusRouter $router;
@@ -97,6 +98,18 @@ final class Router {
         $this->router->get('/api/v1/nidadas/cruce/(\d+)', NestController::class . '@byMating');
         $this->router->get('/api/v1/nidadas/(\d+)', NestController::class . '@show');
         $this->router->post('/api/v1/nidadas', NestController::class . '@store');
+        
+        
+
+        // Crías: asociadas a una nidada y a un canario; sin borrado físico
+        $this->router->get('/api/v1/crias', ChickController::class . '@index');
+        $this->router->get('/api/v1/crias/nidada/(\d+)', ChickController::class . '@byNest');
+        $this->router->get('/api/v1/crias/(\d+)', ChickController::class . '@show');
+        $this->router->post('/api/v1/crias', ChickController::class . '@store');
+        $this->router->put('/api/v1/crias/(\d+)', ChickController::class . '@update');
+        $this->router->patch('/api/v1/crias/(\d+)', ChickController::class . '@update');
+
+        
 
         // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
         $this->router->get('/api/v1/wiki', WikiController::class . '@index');
