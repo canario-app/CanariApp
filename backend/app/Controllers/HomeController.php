@@ -102,6 +102,11 @@ class HomeController {
                     'PUT /api/v1/crias/{id}',
                     'PATCH /api/v1/crias/{id}',
                 ],
+                'simulations' => [
+                    'GET /api/v1/simulaciones',
+                    'GET /api/v1/simulaciones/{id}',
+                    'POST /api/v1/simulaciones',
+                ],
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',
