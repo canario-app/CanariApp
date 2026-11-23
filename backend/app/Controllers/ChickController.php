@@ -8,6 +8,7 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Helpers\Sanitizer;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
+use CanariApp\Backend\Models\Canary;
 use CanariApp\Backend\Models\Chick;
 use Throwable;
 
@@ -245,5 +246,49 @@ class ChickController {
                 'Error de validación.'
             ),
         };
+    }
+
+    /**
+     * Devuelve el árbol de ascendencia de una cría perteneciente al criadero autenticado.
+     * Admite ?generaciones=1..6 (por defecto 4).
+     */
+    public function ancestry(string|int $id): void {
+        $id_cria = Sanitizer::int($id, 1);
+        if ($id_cria === null) {
+            ResponseHelper::badRequest('El ID de la cría no es válido.');
+        }
+
+        $id_criador = $this->resolveCurrentBreederId();
+        if ($id_criador === null) {
+            return;
+        }
+
+        $rawGen = $_GET['generaciones'] ?? null;
+        $generaciones = Canary::DEFAULT_PEDIGREE_GENERATIONS;
+        if ($rawGen !== null && !(is_string($rawGen) && trim($rawGen) === '')) {
+            $parsedGen = Sanitizer::int($rawGen, 1, Canary::MAX_PEDIGREE_GENERATIONS);
+            if ($parsedGen === null) {
+                ResponseHelper::badRequest(
+                    'El parámetro generaciones debe ser un entero entre 1 y ' . Canary::MAX_PEDIGREE_GENERATIONS . '.'
+                );
+            }
+            $generaciones = $parsedGen;
+        }
+
+        try {
+            $chick = $this->chickModel->findDetailed($id_cria);
+            if ($chick === null || (int) $chick['id_criador'] !== $id_criador) {
+                ResponseHelper::notFound('Cría no encontrada en tu criadero.');
+            }
+
+            $pedigree = (new Canary())->findAncestry((int) $chick['id_canario'], $generaciones);
+
+            ResponseHelper::success([
+                'cria'        => $chick,
+                'ascendencia' => $pedigree,
+            ], 'Ascendencia de la cría obtenida.');
+        } catch (Throwable) {
+            ResponseHelper::internalError('No se pudo obtener la ascendencia de la cría.');
+        }
     }
 }
