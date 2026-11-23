@@ -15,11 +15,13 @@ use CanariApp\Backend\Controllers\CorrectionRequestController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\MatingController;
 use CanariApp\Backend\Controllers\NestController;
+use CanariApp\Backend\Controllers\OperationModeController;
 use CanariApp\Backend\Controllers\PairController;
 use CanariApp\Backend\Controllers\SimulationController;
 use CanariApp\Backend\Controllers\TitleController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
+use CanariApp\Backend\Middlewares\OperationModeMiddleware;
 
 final class Router {
     private BramusRouter $router;
@@ -47,9 +49,11 @@ final class Router {
         });
 
         // Solo el rol criador puede acceder a los módulos operativos de crianza (administrador recibe 403)
+        // Si existe modo mantenimiento o emergencia activo, devuelve 503 Service Unavailable
         $breederRoutes = '/api/v1/(?:criador|canarios|jaulas|parejas|cruces|nidadas|crias|titulos|simulaciones|solicitudes-correccion)(?:/.*)?';
         $this->router->before('GET|POST|PUT|PATCH|DELETE', $breederRoutes, function (): void {
             AuthMiddleware::requireRole('criador');
+            OperationModeMiddleware::ensureNormalMode();
         });
 
         // --- RUTAS PRIVADAS ---
@@ -61,6 +65,9 @@ final class Router {
         });
 
         $this->router->post('/api/v1/logout', AuthController::class . '@logout');
+
+        // Consulta del estado de operación del sistema (normal, mantenimiento o emergencia)
+        $this->router->get('/api/v1/modo-operacion/estado', OperationModeController::class . '@status');
 
         // Perfil del criador autenticado
         $this->router->get('/api/v1/criador/perfil', BreederController::class . '@myProfile');
@@ -77,6 +84,14 @@ final class Router {
         $this->router->get('/api/v1/admin/solicitudes-correccion', CorrectionRequestController::class . '@adminIndex');
         $this->router->get('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@adminShow');
         $this->router->patch('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@resolve');
+
+        // Gestión administrativa de modos de operación (SRS-RF028, DAT-003)
+        $this->router->get('/api/v1/admin/modo-operacion', OperationModeController::class . '@index');
+        $this->router->get('/api/v1/admin/modo-operacion/activo', OperationModeController::class . '@status');
+        $this->router->get('/api/v1/admin/modo-operacion/(\d+)', OperationModeController::class . '@show');
+        $this->router->post('/api/v1/admin/modo-operacion', OperationModeController::class . '@activate');
+        $this->router->patch('/api/v1/admin/modo-operacion/(\d+)/diagnostico', OperationModeController::class . '@diagnose');
+        $this->router->patch('/api/v1/admin/modo-operacion/(\d+)/desactivar', OperationModeController::class . '@deactivate');
 
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
