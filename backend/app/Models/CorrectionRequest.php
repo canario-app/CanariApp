@@ -38,11 +38,27 @@ class CorrectionRequest extends BaseModel {
      * @return array<string, mixed>|null
      */
     public function findDetailed(int $id): ?array {
-        $sql = $this->detailedSelect()
+        $sql =$this->detailedSelect()
             . ' WHERE sc.id_solicitud = :id_solicitud'
             . ' LIMIT 1';
 
-        return $this->fetch($sql, ['id_solicitud' => $id]);
+        return $this->fetch($sql, ['id_solicitud' =>$id]);
+    }
+
+    /**
+     * Indica si una solicitud aprobada ya fue aplicada y cerrada mediante corrección.
+     */
+    public function isAlreadyApplied(int $idSolicitud): bool {
+        $row =$this->fetch(
+            "SELECT 1
+               FROM auditoria
+              WHERE id_solicitud = :id_solicitud
+                AND accion = 'correccion'
+              LIMIT 1",
+            ['id_solicitud' => $idSolicitud]
+        );
+
+        return $row !== null;
     }
 
     /**
@@ -53,35 +69,29 @@ class CorrectionRequest extends BaseModel {
      * @return array<int, array<string, mixed>>
      */
     public function findAllDetailed(array $filters = [], ?int $idCriador = null): array {
-        $conditions = [];
-        $params = [];
+        $conditions = [];$params = [];
 
-        if ($idCriador !== null) {
-            $conditions[] = 'sc.id_criador = :id_criador';
-            $params['id_criador'] = $idCriador;
-        } elseif (isset($filters['id_criador']) && $this->positiveInt($filters['id_criador']) !== null) {
-            $conditions[] = 'sc.id_criador = :id_criador';
-            $params['id_criador'] = (int) $filters['id_criador'];
+        if ($idCriador !== null) {$conditions[] = 'sc.id_criador = :id_criador';
+            $params['id_criador'] =$idCriador;
+        } elseif (isset($filters['id_criador']) &&$this->positiveInt($filters['id_criador']) !== null) {$conditions[] = 'sc.id_criador = :id_criador';
+            $params['id_criador'] = (int)$filters['id_criador'];
         }
 
-        $estado = $filters['estado'] ?? null;
-        if (is_string($estado) && in_array($estado, self::STATES, true)) {
-            $conditions[] = 'sc.estado = :estado';
-            $params['estado'] = $estado;
+        $estado =$filters['estado'] ?? null;
+        if (is_string($estado) && in_array($estado, self::STATES, true)) {$conditions[] = 'sc.estado = :estado';
+            $params['estado'] =$estado;
         }
 
-        $dato = $filters['dato_a_corregir'] ?? null;
-        if (is_string($dato) && in_array($dato, self::ALLOWED_FIELDS, true)) {
-            $conditions[] = 'sc.dato_a_corregir = :dato_a_corregir';
-            $params['dato_a_corregir'] = $dato;
+        $dato =$filters['dato_a_corregir'] ?? null;
+        if (is_string($dato) && in_array($dato, self::ALLOWED_FIELDS, true)) {$conditions[] = 'sc.dato_a_corregir = :dato_a_corregir';
+            $params['dato_a_corregir'] =$dato;
         }
 
-        if (isset($filters['id_canario']) && $this->positiveInt($filters['id_canario']) !== null) {
-            $conditions[] = 'sc.id_canario = :id_canario';
-            $params['id_canario'] = (int) $filters['id_canario'];
+        if (isset($filters['id_canario']) &&$this->positiveInt($filters['id_canario']) !== null) {$conditions[] = 'sc.id_canario = :id_canario';
+            $params['id_canario'] = (int)$filters['id_canario'];
         }
 
-        $sql = $this->detailedSelect();
+        $sql =$this->detailedSelect();
 
         if ($conditions !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
@@ -89,7 +99,7 @@ class CorrectionRequest extends BaseModel {
 
         $sql .= ' ORDER BY sc.fecha_solicitud DESC, sc.id_solicitud DESC';
 
-        return $this->fetchAll($sql, $params);
+        return $this->fetchAll($sql,$params);
     }
 
     /**
@@ -104,14 +114,13 @@ class CorrectionRequest extends BaseModel {
     ): int|string {
         $cleanReason = trim($motivo);
         if (
-            $idCanario <= 0
-            || !in_array($datoACorregir, self::ALLOWED_FIELDS, true)
+            $idCanario <= 0 || !in_array($datoACorregir, self::ALLOWED_FIELDS, true)
             || $cleanReason === ''
         ) {
             return self::ERROR_INVALID_DATA;
         }
 
-        $canary = $this->fetch(
+        $canary =$this->fetch(
             'SELECT id_canario, id_criador FROM canario WHERE id_canario = :id_canario LIMIT 1',
             ['id_canario' => $idCanario]
         );
@@ -120,11 +129,11 @@ class CorrectionRequest extends BaseModel {
             return self::ERROR_NOT_FOUND;
         }
 
-        if ((int) $canary['id_criador'] !== $idCriador) {
+        if ((int) $canary['id_criador'] !==$idCriador) {
             return self::ERROR_FORBIDDEN_CANARY;
         }
 
-        $hasPending = $this->existsBy([
+        $hasPending =$this->existsBy([
             'id_canario' => $idCanario,
             'estado'     => 'pendiente',
         ]);
@@ -160,30 +169,27 @@ class CorrectionRequest extends BaseModel {
      *
      * @return array{previous: array<string, mixed>, updated: array<string, mixed>}|string
      */
-    public function cancelByBreeder(int $idSolicitud, int $idCriador): array|string {
+    public function cancelByBreeder(int $idSolicitud, int$idCriador): array|string {
         try {
             $this->beginTransaction();
 
-            $current = $this->fetch(
+            $current =$this->fetch(
                 'SELECT * FROM ' . $this->quoteIdentifier($this->table)
                 . ' WHERE id_solicitud = :id_solicitud FOR UPDATE',
                 ['id_solicitud' => $idSolicitud]
             );
 
-            if ($current === null) {
-                $this->rollBack();
+            if ($current === null) {$this->rollBack();
 
                 return self::ERROR_NOT_FOUND;
             }
 
-            if ((int) $current['id_criador'] !== $idCriador) {
-                $this->rollBack();
+            if ((int) $current['id_criador'] !== $idCriador) {$this->rollBack();
 
                 return self::ERROR_FORBIDDEN_CANARY;
             }
 
-            if ($current['estado'] !== 'pendiente') {
-                $this->rollBack();
+            if ($current['estado'] !== 'pendiente') {$this->rollBack();
 
                 return self::ERROR_INVALID_STATE;
             }
@@ -197,16 +203,14 @@ class CorrectionRequest extends BaseModel {
             );
 
             $this->commit();
-        } catch (PDOException $exception) {
-            $this->rollBack();
+        } catch (PDOException $exception) {$this->rollBack();
 
             return $this->mapWriteException($exception);
-        } catch (Throwable $exception) {
-            $this->rollBack();
+        } catch (Throwable $exception) {$this->rollBack();
             throw $exception;
         }
 
-        $updated = $this->findDetailed($idSolicitud) ?? $current;
+        $updated =$this->findDetailed($idSolicitud) ?? $current;
 
         return [
             'previous' => $current,
@@ -219,7 +223,7 @@ class CorrectionRequest extends BaseModel {
      *
      * @return array{previous: array<string, mixed>, updated: array<string, mixed>}|string
      */
-    public function resolveByAdmin(int $idSolicitud, string $nuevoEstado): array|string {
+    public function resolveByAdmin(int $idSolicitud, string$nuevoEstado): array|string {
         if (!in_array($nuevoEstado, self::RESOLUTION_STATES, true)) {
             return self::ERROR_INVALID_DATA;
         }
@@ -227,20 +231,18 @@ class CorrectionRequest extends BaseModel {
         try {
             $this->beginTransaction();
 
-            $current = $this->fetch(
+            $current =$this->fetch(
                 'SELECT * FROM ' . $this->quoteIdentifier($this->table)
                 . ' WHERE id_solicitud = :id_solicitud FOR UPDATE',
                 ['id_solicitud' => $idSolicitud]
             );
 
-            if ($current === null) {
-                $this->rollBack();
+            if ($current === null) {$this->rollBack();
 
                 return self::ERROR_NOT_FOUND;
             }
 
-            if ($current['estado'] !== 'pendiente') {
-                $this->rollBack();
+            if ($current['estado'] !== 'pendiente') {$this->rollBack();
 
                 return self::ERROR_INVALID_STATE;
             }
@@ -257,16 +259,14 @@ class CorrectionRequest extends BaseModel {
             );
 
             $this->commit();
-        } catch (PDOException $exception) {
-            $this->rollBack();
+        } catch (PDOException $exception) {$this->rollBack();
 
             return $this->mapWriteException($exception);
-        } catch (Throwable $exception) {
-            $this->rollBack();
+        } catch (Throwable $exception) {$this->rollBack();
             throw $exception;
         }
 
-        $updated = $this->findDetailed($idSolicitud) ?? $current;
+        $updated =$this->findDetailed($idSolicitud) ?? $current;
 
         return [
             'previous' => $current,
@@ -306,13 +306,13 @@ class CorrectionRequest extends BaseModel {
         if (is_string($value)) {
             $value = trim($value);
         }
-        if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/', $value) === 1)) {
+        if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/',$value) === 1)) {
             return null;
         }
 
-        $integer = (int) $value;
+        $integer = (int)$value;
 
-        return $integer > 0 ? $integer : null;
+        return $integer > 0 ?$integer : null;
     }
 
     /**

@@ -3,7 +3,7 @@
 Documento de contrato entre Frontend, Backend y Base de Datos (`canarios_v7_1.sql`). Si cambia la estructura de los datos o algún endpoint, coordinar y actualizar este acuerdo antes de integrar el cambio.
 
 - **Fechas de calendario:** `YYYY-MM-DD`.
-- **Fechas y horas de monitoreo/eventos:** zona horaria configurada en `APP_TIMEZONE`.
+- **Fechas y horas de monitoreo/eventos:** zona horaria configurada en `APP_TIMEZONE` (`America/Santiago`).
 
 ---
 
@@ -19,7 +19,7 @@ Documento de contrato entre Frontend, Backend y Base de Datos (`canarios_v7_1.sq
    - [4.4 Parejas (incluye Modo de Corrección)](#44-parejas)
    - [4.5 Cruces](#45-cruces)
    - [4.6 Nidadas](#46-nidadas)
-   - [4.7 Crías (incluye progenitores y Ascendencia)](#47-crías)
+   - [4.7 Crías (incluye alta conjunta RF019/RF020 y Ascendencia)](#47-crías)
    - [4.8 Títulos de competencia (incluye Descendencia)](#48-títulos-de-competencia)
    - [4.9 Simulación genética](#49-simulación-genética)
 5. [Catálogos oficiales (Wiki)](#5-catálogos-oficiales-wiki)
@@ -50,12 +50,12 @@ Documento de contrato entre Frontend, Backend y Base de Datos (`canarios_v7_1.sq
 - **Códigos HTTP utilizados:**
   - `200 OK` / `201 Created`: operación exitosa.
   - `400 Bad Request`: JSON malformado o identificador inválido.
-  - `401 Unauthorized`: token ausente, inválido, expirado o sesión cerrada.
+  - `401 Unauthorized`: token ausente, inválido, expirado, sesión cerrada o contraseña de confirmación incorrecta.
   - `403 Forbidden`: rol sin permisos, acceso a recurso de otro criadero o intento de editar campos protegidos sin Modo de Corrección.
   - `404 Not Found`: ruta o recurso inexistente.
   - `409 Conflict`: duplicidad o violación de regla de ciclo de vida / integridad en BD.
   - `422 Unprocessable Entity`: error de validación de campos o referencias.
-  - `500 Internal Server Error`: error inesperado del servidor.
+  - `500 Internal Server Error`: error inesperado del servidor o fallo en `pg_dump`.
   - `503 Service Unavailable`: sistema en modo `mantenimiento` o `emergencia` (bloquea módulos operativos de crianza).
 
 ### Matriz de permisos por ruta
@@ -72,7 +72,7 @@ Documento de contrato entre Frontend, Backend y Base de Datos (`canarios_v7_1.sq
 
 ## 2. Acceso, sesión y estado operativo
 
-La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurable mediante `JWT_EXPIRATION` en `.env` (por defecto `7200` segundos). El cierre de sesión revoca el hash SHA-256 del token actual en la tabla inmutable `auditoria`.
+La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurable mediante `JWT_EXPIRATION` en `.env` (por defecto `7200` segundos) y clave obligatoria `JWT_SECRET`. El cierre de sesión revoca el hash SHA-256 del token actual en la tabla inmutable `auditoria`.
 
 ### 1. Iniciar sesión
 
@@ -84,7 +84,7 @@ La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurabl
 | Ejemplo de petición | `{"correo": "criador@canariapp.cl", "password": "********"}` |
 | Ejemplo de respuesta | `200` con `data` = `{"token": "<jwt>", "user": {"id_usuario": 2, "nombre": "...", "correo": "...", "rol": "criador"}}` |
 | Errores esperados | `400` campos faltantes, `401` credenciales incorrectas, `500` |
-| Reglas de validación | El correo se normaliza a minúsculas antes de consultar; registra evento `login` en `auditoria` |
+| Reglas de validación | El correo se normaliza a minúsculas antes de consultar. Tanto los inicios exitosos (`login`) como los fallidos (`login_fallido`) se registran en `auditoria` sin almacenar jamás la contraseña ingresada (`SEG-003`) |
 
 ### 2. Ver sesión actual
 
@@ -169,9 +169,9 @@ Todas las rutas de esta sección están restringidas exclusivamente al rol `cria
 
 ### 4.1 Canarios
 
-El ejemplar se identifica por el **anillo completo**: número de anillo (1 a 6 dígitos), sigla del club, número de socio (1 a 5 dígitos) y temporada (año de 4 dígitos). La combinación es única en todo el sistema, sin importar el criadero; la BD compara los números como enteros (`0005` y `5` son el mismo anillo).
+El ejemplar se identifica por el **anillo completo**: número de anillo (1 a 6 dígitos), sigla del club, número de socio (1 a 5 dígitos) y temporada (año de 4 dígitos, no mayor al año actual). La combinación es única en todo el sistema, sin importar el criadero; la BD compara los números como enteros (`0005` y `5` son el mismo anillo).
 
-En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`, `id_color` ni tabla `color`. `id_canario`, `id_criador`, `fecha_registro` y `requiere_revision` no se aceptan en el cuerpo[cite: 1, 3].
+En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`, `id_color` ni tabla `color`. `id_canario`, `id_criador`, `fecha_registro` y `requiere_revision` no se aceptan en el cuerpo[cite: 5, 13, 15].
 
 #### Objeto `canario`
 
@@ -183,13 +183,13 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 | `club_sigla` | texto | `club.sigla` |
 | `numero_socio` | texto (1–5 dígitos) | `canario.numero_socio` |
 | `temporada` | entero | `canario.temporada` |
-| `sexo` | `"M"` o `"H"` | `canario.sexo` |
-| `id_variedad` | entero | `canario.id_variedad` |
-| `variedad_nombre` | texto | `variedad.nombre` |
+| `sexo` | `"M"`, `"H"` o `null` (en cría pendiente) | `canario.sexo` |
+| `id_variedad` | entero o `null` (en cría pendiente) | `canario.id_variedad` |
+| `variedad_nombre` | texto o `null` | `variedad.nombre` |
 | `id_criador` | entero | `canario.id_criador` |
 | `criador_nombre` | texto | `usuario.nombre` |
 | `fecha_registro` | fecha y hora | `canario.fecha_registro` |
-| `requiere_revision` | booleano | `canario.requiere_revision` (calculado por `trg_validar_sexo_variedad`)[cite: 1] |
+| `requiere_revision` | booleano | `canario.requiere_revision` (calculado por `trg_validar_sexo_variedad`)[cite: 5] |
 
 #### 1. Listar canarios
 
@@ -220,35 +220,35 @@ En el esquema v7.1 **no existen** `nombre`, `fecha_nacimiento`, `disponibilidad`
 | Quién puede usarla | Criador dueño del canario |
 | Parámetros | `{id}` entero positivo (`id_canario`). Query opcional: `generaciones` (entero `1` a `6`, por defecto `4`) |
 | Ejemplo de petición | `GET /api/v1/canarios/24/ascendencia?generaciones=3` |
-| Ejemplo de respuesta | `200` con `data` = `{"generaciones_solicitadas": 3, "generaciones_encontradas": 2, "total_ejemplares_arbol": 5, "arbol": {...}}`[cite: 1] |
+| Ejemplo de respuesta | `200` con `data` = `{"generaciones_solicitadas": 3, "generaciones_encontradas": 2, "total_ejemplares_arbol": 5, "arbol": {...}}`[cite: 13] |
 | Errores esperados | `400` ID o `generaciones` fuera de rango, `401`, `403` ejemplar ajeno, `404` inexistente, `500`, `503` |
-| Reglas de validación | Recorre recursivamente `cria -> nidada -> cruce -> pareja` (`id_macho` e `id_hembra`). Si un ancestro no tiene fila en `cria`, se marca `"es_fundador": true` con `"padre": null` y `"madre": null`[cite: 1] |
+| Reglas de validación | Recorre recursivamente `cria -> nidada -> cruce -> pareja` (`id_macho` e `id_hembra`). Si un ancestro no tiene fila en `cria`, se marca `"es_fundador": true` con `"padre": null` y `"madre": null`[cite: 13] |
 
-#### 4. Crear canario
+#### 4. Crear canario adulto/sexado
 
 | Campo o decisión | Valor acordado |
 |---|---|
 | Método y ruta | `POST /api/v1/canarios` |
 | Quién puede usarla | Criador autenticado |
-| Campos obligatorios | `anillo`, `id_club`, `numero_socio`, `temporada`, `sexo`, `id_variedad`[cite: 3] |
+| Campos obligatorios | `anillo`, `id_club`, `numero_socio`, `temporada`, `sexo`, `id_variedad`[cite: 15] |
 | Ejemplo de petición | `{"anillo": "2901", "id_club": 4, "numero_socio": "456", "temporada": 2026, "sexo": "M", "id_variedad": 12}` |
 | Ejemplo de respuesta | `201` con `data` = objeto `canario` creado |
 | Errores esperados | `400`, `401`, `403`, `409` anillo no disponible, `422` validación o referencia inexistente, `503` |
-| Reglas de validación | `id_criador` se toma del usuario autenticado. Si `sexo` no coincide con el sexo implícito de `variedad`, la BD marca `requiere_revision = true`[cite: 1, 3] |
+| Reglas de validación | `id_criador` se toma del usuario autenticado y `temporada` no puede superar el año actual. Para registrar crías con `sexo` o `id_variedad` pendientes (`null`), utilizar `POST /api/v1/crias` (`RF019`, `RF020`) |
 
-#### 5. Actualizar canario (modo estándar y Modo de Corrección `SRS-RF031`)
+#### 5. Actualizar canario (modo estándar y Modo de Corrección `SRS-RF031` / `SRS-RF033`)
 
 | Campo o decisión | Valor acordado |
 |---|---|
 | Método y ruta | `PUT` o `PATCH /api/v1/canarios/{id}` |
 | Quién puede usarla | Criador dueño del canario |
-| Campos editables (modo estándar) | `id_club`, `numero_socio`, `temporada`, `id_variedad` (y `sexo` solo si estaba en `null`)[cite: 1] |
-| Campos protegidos (Modo de Corrección) | `anillo` y modificación de `sexo` ya asignado. Requiere cabecera `X-Correction-Mode: true` o `"modo_correccion": true` en el cuerpo[cite: 1, 3] |
-| Metadatos de corrección | `motivo` (obligatorio en Modo de Corrección, máx. 500 caracteres), `id_solicitud` (opcional, entero positivo), `anular_parejas` (opcional, booleano)[cite: 3] |
-| Ejemplo de corrección | `PATCH /api/v1/canarios/12` con `{"modo_correccion": true, "sexo": "H", "motivo": "Error de sexaje previo", "id_solicitud": 1}` |
+| Campos editables (modo estándar) | `id_club`, `numero_socio`, `temporada` (`<=` año actual), `id_variedad` (y `sexo` solo si estaba en `null` por ser cría pendiente, `RF020`)[cite: 13] |
+| Activación de Modo de Corrección | Cabecera `X-Correction-Mode: true` o `"modo_correccion": true` en el cuerpo[cite: 15] |
+| Campos obligatorios en Modo de Corrección | `id_solicitud` (entero positivo de una solicitud en estado `"aprobada"` del mismo ejemplar), `password` (contraseña actual del criador, `RF031`), `motivo` (máx. 500 caracteres) y **únicamente** el campo autorizado en la solicitud (`sexo` o `id_variedad`). Opcional: `anular_parejas` (booleano)[cite: 13, 15] |
+| Ejemplo de corrección | `PATCH /api/v1/canarios/12` con `{"modo_correccion": true, "id_solicitud": 1, "password": "MiPassword123", "sexo": "H", "motivo": "Error de sexaje previo"}` |
 | Ejemplo de respuesta | `200` con `data` = objeto `canario` actualizado |
-| Errores esperados | `400`, `401`, `403` intento de cambiar `anillo` o `sexo` sin Modo de Corrección, `404`, `409` anillo duplicado o parejas activas/con cruces sin resolver, `422` falta `motivo` o datos inválidos, `503`[cite: 3] |
-| Reglas de validación | Si cambia `sexo` y el ejemplar tiene parejas no anuladas: con `anular_parejas: true` anula automáticamente las que no tengan cruces; si alguna pareja tiene cruces, devuelve `409` para reasignarla primero vía `PATCH /api/v1/parejas/{id}`[cite: 1, 3] |
+| Errores esperados | `400`, `401` contraseña del criador incorrecta, `403` intento de cambiar `anillo` o `sexo` sin Modo de Corrección, `404`, `409` solicitud no aprobada/ya cerrada o parejas activas/con cruces sin resolver, `422` intento de editar `anillo` u otro campo no autorizado en la solicitud, `503`[cite: 15] |
+| Reglas de validación | El `anillo` no es editable mediante Modo de Corrección. Al guardar, el servidor cierra la solicitud de corrección y registra la auditoría en la misma transacción (`RF033`)[cite: 13, 15] |
 
 #### 6. Eliminar canario
 
@@ -371,7 +371,7 @@ La gestión de jaulas queda limitada al criadero del usuario autenticado (StRS-0
 
 ### 4.4 Parejas
 
-Asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo criadero con una jaula (`id_jaula`) del mismo criadero. Toda pareja nace en estado `"activa"` con `fecha_fin = null`; un macho admite hasta 6 parejas activas, mientras que una hembra y una jaula admiten solo una pareja activa a la vez.
+Asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo criadero con una jaula (`id_jaula`) del mismo criadero. Toda pareja nace en estado `"activa"` con `fecha_fin = null`; una hembra y una jaula admiten solo una pareja activa a la vez (`uq_pareja_hembra_activa`, `uq_pareja_jaula_activa`)[cite: 5].
 
 #### Objeto `pareja`
 
@@ -419,7 +419,7 @@ Asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo criadero co
 | Campos obligatorios | `id_macho`, `id_hembra`, `id_jaula`. Opcional: `fecha_formacion` (`YYYY-MM-DD`, por defecto fecha actual) |
 | Ejemplo de petición | `{"id_macho": 10, "id_hembra": 14, "id_jaula": 2, "fecha_formacion": "2026-11-22"}` |
 | Ejemplo de respuesta | `201` con `data` = objeto `pareja` creado en estado `"activa"` |
-| Errores esperados | `400`, `401`, `403`, `409` límite de 6 parejas por macho, hembra/jaula ocupada o consanguinidad directa, `422` validación o referencia ajena/inexistente, `503` |
+| Errores esperados | `400`, `401`, `403`, `409` `"La jaula ya está ocupada por una pareja activa."` o `"La hembra ya tiene pareja activa."`[cite: 16], `422` validación o referencia ajena/inexistente, `503` |
 
 #### 4. Actualizar pareja (modo estándar y Modo de Corrección `SRS-RF031`)
 
@@ -433,8 +433,8 @@ Asocia un macho (`sexo = 'M'`) y una hembra (`sexo = 'H'`) del mismo criadero co
 | Ejemplo estándar | `PATCH /api/v1/parejas/3` con `{"estado": "finalizada"}` |
 | Ejemplo de corrección | `PATCH /api/v1/parejas/3` con `{"modo_correccion": true, "id_macho": 18, "motivo": "Reasignación por error de sexaje en ejemplar #12"}` |
 | Ejemplo de respuesta | `200` con `data` = objeto `pareja` actualizado |
-| Errores esperados | `400`, `401`, `403` intento de cambiar `id_macho` o `id_hembra` sin Modo de Corrección, `404`, `409` jaula ocupada, intento de anular pareja con cruces (`fn_estado_pareja`) o consanguinidad directa, `422` validación, `503` |
-| Reglas de validación | Al pasar a `"finalizada"` o `"anulada"` se libera la jaula y se exige `fecha_fin >= fecha_formacion` (si se omite `fecha_fin`, se asigna hoy). Una pareja cerrada no vuelve a abrirse y una pareja con cruces no puede anularse |
+| Errores esperados | `400`, `401`, `403` intento de cambiar `id_macho` o `id_hembra` sin Modo de Corrección, `404`, `409` jaula ocupada, hembra con pareja activa, intento de anular pareja con cruces (`fn_estado_pareja`) o consanguinidad directa[cite: 11, 16], `422` validación, `503` |
+| Reglas de validación | Al pasar a `"finalizada"` o `"anulada"` se libera la jaula y se exige `fecha_fin >= fecha_formacion` (si se omite `fecha_fin`, se asigna hoy en `APP_TIMEZONE`). Una pareja cerrada no vuelve a abrirse y una pareja con cruces no puede anularse |
 
 #### 5. Eliminar pareja
 
@@ -563,31 +563,33 @@ Cada nidada pertenece a un cruce (`SRS-RF018`). `id_cruce` es inmutable (`trg_ni
 
 ### 4.7 Crías
 
-Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una mutación (`factor_genetico`). `es_portadora` lo calcula la BD (`factor_genetico IS NOT NULL`). `id_nidada` e `id_canario` son inmutables tras el registro; no existe `DELETE`[cite: 2].
+Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una mutación (`factor_genetico`). Para cumplir el trigger diferido `trg_validar_pendiente_cria` de PostgreSQL v7.1 (`RF019`, `RF020`), `POST /api/v1/crias` permite crear **en una sola transacción** tanto el ejemplar en `canario` (con `sexo` e `id_variedad` opcionales / `null`) como su registro en `cria`[cite: 5, 12, 14].
+
+`es_portadora` lo calcula la BD (`factor_genetico IS NOT NULL`). `id_nidada` e `id_canario` son inmutables tras el registro; no existe `DELETE`[cite: 5].
 
 #### Objeto `cria`
 
 | Campo | Tipo | Origen |
 |---|---|---|
-| `id_cria` | entero | `cria.id_cria`[cite: 2] |
-| `id_nidada` | entero | `cria.id_nidada`[cite: 2] |
-| `id_canario` | entero | `cria.id_canario`[cite: 2] |
-| `factor_genetico` | entero o `null` | `cria.factor_genetico` (`id_mutacion` o `null`)[cite: 2] |
-| `es_portadora` | booleano | `cria.es_portadora` (calculado por la BD)[cite: 2] |
-| `reservada` | booleano | `cria.reservada`[cite: 2] |
-| `id_criador` | entero | `pareja.id_criador`[cite: 2] |
+| `id_cria` | entero | `cria.id_cria` |
+| `id_nidada` | entero | `cria.id_nidada` |
+| `id_canario` | entero | `cria.id_canario` |
+| `factor_genetico` | entero o `null` | `cria.factor_genetico` (`id_mutacion` o `null`) |
+| `es_portadora` | booleano | `cria.es_portadora` (calculado por la BD) |
+| `reservada` | booleano | `cria.reservada` |
+| `id_criador` | entero | `pareja.id_criador` |
 | `id_pareja` | entero | `pareja.id_pareja` |
 | `id_macho` | entero | `pareja.id_macho` |
 | `anillo_macho` | texto | `canario.anillo` (padre) |
 | `id_hembra` | entero | `pareja.id_hembra` |
 | `anillo_hembra` | texto | `canario.anillo` (madre) |
-| `id_cruce` | entero | `nidada.id_cruce`[cite: 2] |
-| `fecha_nacimiento` | fecha (`YYYY-MM-DD`) | `nidada.fecha_nacimiento`[cite: 2] |
-| `anillo` | texto | `canario.anillo` (cría)[cite: 2] |
-| `temporada` | entero | `canario.temporada`[cite: 2] |
-| `sexo` | `"M"`, `"H"` o `null` | `canario.sexo`[cite: 2] |
-| `id_variedad` | entero o `null` | `canario.id_variedad`[cite: 2] |
-| `mutacion_nombre` | texto o `null` | `mutacion.nombre`[cite: 2] |
+| `id_cruce` | entero | `nidada.id_cruce` |
+| `fecha_nacimiento` | fecha (`YYYY-MM-DD`) | `nidada.fecha_nacimiento` |
+| `anillo` | texto | `canario.anillo` (cría) |
+| `temporada` | entero | `canario.temporada` |
+| `sexo` | `"M"`, `"H"` o `null` | `canario.sexo` |
+| `id_variedad` | entero o `null` | `canario.id_variedad` |
+| `mutacion_nombre` | texto o `null` | `mutacion.nombre` |
 
 #### 1. Listar crías
 
@@ -595,7 +597,7 @@ Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una muta
 |---|---|
 | Método y ruta | `GET /api/v1/crias` |
 | Quién puede usarla | Criador autenticado (solo crías de su criadero) |
-| Filtros opcionales | `id_nidada`, `id_canario`, `factor_genetico`, `reservada`[cite: 4] |
+| Filtros opcionales | `id_nidada`, `id_canario`, `factor_genetico`, `reservada` |
 | Ejemplo de respuesta | `200` con `data` = lista de objetos `cria` |
 | Errores esperados | `401`, `403`, `404`, `500`, `503` |
 
@@ -605,7 +607,7 @@ Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una muta
 |---|---|
 | Método y ruta | `GET /api/v1/crias/nidada/{id}` |
 | Quién puede usarla | Criador dueño de la nidada |
-| Campos | `{id}` entero positivo (`id_nidada`)[cite: 4] |
+| Campos | `{id}` entero positivo (`id_nidada`) |
 | Ejemplo de respuesta | `200` con `data` = lista de objetos `cria` de esa nidada |
 | Errores esperados | `400`, `401`, `403`, `404`, `500`, `503` |
 
@@ -615,7 +617,7 @@ Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una muta
 |---|---|
 | Método y ruta | `GET /api/v1/crias/{id}` |
 | Quién puede usarla | Criador dueño de la cría |
-| Campos | `{id}` entero positivo (`id_cria`)[cite: 4] |
+| Campos | `{id}` entero positivo (`id_cria`) |
 | Ejemplo de respuesta | `200` con `data` = objeto `cria` (incluye `id_macho`, `anillo_macho`, `id_hembra` y `anillo_hembra`) |
 | Errores esperados | `400`, `401`, `403`, `404`, `500`, `503` |
 
@@ -630,17 +632,18 @@ Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una muta
 | Ejemplo de respuesta | `200` con `data` = `{"cria": {...}, "ascendencia": {"generaciones_solicitadas": 4, "generaciones_encontradas": 2, "total_ejemplares_arbol": 5, "arbol": {...}}}` |
 | Errores esperados | `400` ID o `generaciones` fuera de rango, `401`, `403`, `404` cría inexistente o ajena, `500`, `503` |
 
-#### 5. Registrar cría
+#### 5. Registrar cría (alta conjunta transaccional `RF019` / `RF020`)
 
 | Campo o decisión | Valor acordado |
 |---|---|
 | Método y ruta | `POST /api/v1/crias` |
 | Quién puede usarla | Criador autenticado |
-| Campos obligatorios | `id_nidada` (entero positivo), `id_canario` (entero positivo)[cite: 2, 4] |
-| Campos opcionales | `factor_genetico` (entero positivo o `null`), `reservada` (booleano, por defecto `false`)[cite: 2, 4] |
-| Ejemplo de petición | `{"id_nidada": 8, "id_canario": 25, "factor_genetico": 1, "reservada": true}` |
+| Modalidad 1 — Alta conjunta (recomendada) | Obligatorios: `id_nidada`, `anillo` (1–6 dígitos), `id_club`, `numero_socio` (1–5 dígitos), `temporada` (`<=` año actual). Opcionales: `sexo` (`"M"`, `"H"` o `null`), `id_variedad` (entero positivo o `null`), `factor_genetico` (entero positivo o `null`), `reservada` (booleano, por defecto `false`)[cite: 14] |
+| Modalidad 2 — Ejemplar existente | Obligatorios: `id_nidada`, `id_canario`. Opcionales: `factor_genetico`, `reservada`[cite: 14] |
+| Ejemplo alta sin sexo ni variedad | `{"id_nidada": 8, "anillo": "0142", "id_club": 4, "numero_socio": "456", "temporada": 2026, "sexo": null, "id_variedad": null, "reservada": true}` |
+| Ejemplo con ejemplar existente | `{"id_nidada": 8, "id_canario": 25, "factor_genetico": 1, "reservada": true}` |
 | Ejemplo de respuesta | `201` con `data` = objeto `cria` creado |
-| Errores esperados | `400`, `401`, `403`, `404` nidada inexistente o ajena, `409` canario ya registrado como cría, `422` validación, referencia inválida o ejemplar igual a alguno de sus padres, `503`[cite: 2, 4] |
+| Errores esperados | `400`, `401`, `403`, `404` nidada inexistente o ajena, `409` anillo ya ocupado o canario ya registrado como cría, `422` validación o referencia inválida, `503`[cite: 14] |
 
 #### 6. Actualizar cría
 
@@ -648,8 +651,8 @@ Vincula una `nidada` con un ejemplar en `canario` y, opcionalmente, con una muta
 |---|---|
 | Método y ruta | `PUT` o `PATCH /api/v1/crias/{id}` |
 | Quién puede usarla | Criador dueño de la cría |
-| Campos opcionales | `factor_genetico` (entero positivo o `null`), `reservada` (booleano)[cite: 2, 4] |
-| Campos no permitidos | `id_cria`, `id_criador`, `es_portadora`, `id_nidada`, `id_canario`[cite: 4] |
+| Campos opcionales | `factor_genetico` (entero positivo o `null`), `reservada` (booleano)[cite: 14] |
+| Campos no permitidos | `id_cria`, `id_criador`, `es_portadora`, `id_nidada`, `id_canario`[cite: 14] |
 | Ejemplo de petición | `PATCH /api/v1/crias/4` con `{"reservada": true, "factor_genetico": null}` |
 | Ejemplo de respuesta | `200` con `data` = objeto `cria` actualizado |
 | Errores esperados | `400`, `401`, `403`, `404`, `409`, `422`, `503` |
@@ -906,7 +909,7 @@ Permite al administrador revisar y dictaminar las solicitudes enviadas por los c
 | Quién puede usarla | Administrador |
 | Campos obligatorios | `estado` (`"aprobada"` o `"rechazada"`). Opcional: `motivo` (observación administrativa, máx. 1000 caracteres) |
 | Ejemplo de petición | `{"estado": "aprobada", "motivo": "Antecedentes verificados, procede corrección"}` |
-| Ejemplo de respuesta | `200` con `data` = objeto `solicitud_correccion` cerrada con `fecha_cierre` |
+| Ejemplo de respuesta | `200` con `data` = objeto `solicitud_correccion` con `fecha_cierre` |
 | Errores esperados | `400`, `401`, `403`, `404`, `409` la solicitud no está en estado `"pendiente"`, `422` estado inválido, `500` |
 
 ---
@@ -1007,7 +1010,7 @@ Consulta de solo lectura sobre la bitácora inmutable `auditoria` (`SEG-003`, `t
 |---|---|
 | Método y ruta | `GET /api/v1/admin/auditoria` |
 | Quién puede usarla | Administrador |
-| Filtros opcionales | `id_usuario`, `accion` (`login`, `logout`, `insert`, `update`, `correccion`), `entidad`, `id_registro`, `id_criador_solicitante`, `id_solicitud`, `fecha_desde` (`YYYY-MM-DD`), `fecha_hasta` (`YYYY-MM-DD`), `buscar`, `limit` (1–200, por defecto `50`), `offset` (por defecto `0`) |
+| Filtros opcionales | `id_usuario`, `accion` (`login`, `login_fallido`, `logout`, `insert`, `update`, `correccion`), `entidad`, `id_registro`, `id_criador_solicitante`, `id_solicitud`, `fecha_desde` (`YYYY-MM-DD`), `fecha_hasta` (`YYYY-MM-DD`), `buscar`, `limit` (1–200, por defecto `50`), `offset` (por defecto `0`) |
 | Ejemplo de petición | `GET /api/v1/admin/auditoria?entidad=canario&accion=correccion&limit=20&offset=0` |
 | Ejemplo de respuesta | `200` con `data` = `{"items": [...], "total": 124, "limit": 20, "offset": 0}` |
 | Errores esperados | `401`, `403`, `500` |
@@ -1026,7 +1029,7 @@ Consulta de solo lectura sobre la bitácora inmutable `auditoria` (`SEG-003`, `t
 
 ### 6.5 Respaldos y rotación
 
-Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`). Al registrar un nuevo respaldo, los registros excedentes más antiguos y sus archivos en `storage/backups/` se eliminan automáticamente en la misma transacción.
+Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`). Primero genera el volcado SQL mediante `pg_dump` en `storage/backups/`; si `pg_dump` falla, aborta sin registrar en `respaldo` ni eliminar respaldos previos.
 
 #### 1. Listar respaldos vigentes
 
@@ -1055,8 +1058,8 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | Quién puede usarla | Administrador |
 | Campos opcionales | `archivo` (nombre seguro `[A-Za-z0-9._-]+`, máx. 255 chars; si se omite se genera `canariapp_backup_YYYYMMDD_HHMMSS_xxxxxx.sql`), `motivo` |
 | Ejemplo de petición | `{"motivo": "Respaldo preventivo previo a cierre de temporada"}` |
-| Ejemplo de respuesta | `201` con `data` = `{"respaldo": {...}, "volcado_fisico": true, "rotados": ["canariapp_backup_...sql"]}` |
-| Errores esperados | `400`, `401`, `403`, `409` nombre de archivo duplicado, `422` nombre inválido, `500` |
+| Ejemplo de respuesta | `201` con `data` = `{"respaldo": {...}, "rotados": ["canariapp_backup_...sql"]}` |
+| Errores esperados | `400`, `401`, `403`, `409` nombre de archivo duplicado, `422` nombre inválido, `500` fallo al ejecutar `pg_dump` (no registra ni rota) |
 
 ---
 
@@ -1070,13 +1073,13 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | | `correo` | texto | Sí (alta/login) | Email válido, máx. 100 caracteres; único sin distinguir mayúsculas (`uq_usuario_correo_lower`) |
 | | `password` | texto | Sí (alta/login) | Mínimo 8 caracteres al crear o actualizar |
 | | `numero_socio` | texto | Sí (alta criador) | 1–5 dígitos; único entre criadores y no editable desde `/criador/perfil` |
-| **Canario** | `anillo` | texto | Sí (alta) | 1–6 dígitos; único globalmente junto con club, socio y temporada (`uq_anillo`) |
+| **Canario** | `anillo` | texto | Sí (alta) | 1–6 dígitos; único globalmente junto con club, socio y temporada (`uq_anillo`); no modificable en Modo de Corrección |
 | | `id_club` | entero | Sí (alta) | Entero positivo existente en `club` |
 | | `numero_socio` | texto | Sí (alta) | 1–5 dígitos |
-| | `temporada` | entero | Sí (alta) | Año de 4 dígitos (`1000`–`9999`) |
-| | `sexo` | texto | Sí (alta) | `"M"` o `"H"` |
-| | `id_variedad` | entero | Sí (alta) | Entero positivo existente en `variedad` |
-| **Pareja** | `id_macho` | entero | Sí (alta) | Ejemplar `"M"` del criadero; máx. 6 parejas activas |
+| | `temporada` | entero | Sí (alta) | Año de 4 dígitos entre `1000` y el año actual (`date('Y')`) |
+| | `sexo` | texto / `null` | Sí en adultos / No en crías | `"M"` o `"H"` (`null` permitido al crear cría mediante `POST /api/v1/crias`) |
+| | `id_variedad` | entero / `null` | Sí en adultos / No en crías | Entero positivo existente en `variedad` (`null` permitido al crear cría mediante `POST /api/v1/crias`) |
+| **Pareja** | `id_macho` | entero | Sí (alta) | Ejemplar `"M"` del criadero |
 | | `id_hembra` | entero | Sí (alta) | Ejemplar `"H"` del criadero distinto de `id_macho`; máx. 1 pareja activa |
 | | `id_jaula` | entero | Sí (alta) | Jaula del criadero; máx. 1 pareja activa |
 | | `fecha_formacion` | fecha | No | `YYYY-MM-DD`, `<=` fecha actual |
@@ -1087,7 +1090,7 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | **Nidada** | `id_cruce` | entero | Sí (alta) | Cruce del criadero; inmutable |
 | | `fecha_nacimiento` | fecha | Sí (alta) | `YYYY-MM-DD`, `>= fecha_cruce` y `<=` fecha actual |
 | **Cría** | `id_nidada` | entero | Sí (alta) | Nidada del criadero; inmutable |
-| | `id_canario` | entero | Sí (alta) | Ejemplar del criadero distinto de los padres; inmutable |
+| | `id_canario` | entero | Sí en modalidad 2 | Ejemplar del criadero distinto de los padres; en modalidad 1 se crea junto con la cría en la misma transacción |
 | | `factor_genetico` | entero / `null` | No | `id_mutacion` válido o `null` |
 | | `reservada` | booleano | No | Por defecto `false` |
 | **Título** | `nombre` | texto | Sí (alta) | 1–100 caracteres no vacío |
@@ -1099,10 +1102,13 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | Código interno | HTTP | Significado |
 |---|---|---|
 | `correction_mode_required` | `403` | Se intentó editar `anillo`/`sexo` (canario) o `id_macho`/`id_hembra` (pareja) sin Modo de Corrección |
-| `forbidden` / `forbidden_canary` / `forbidden_role` | `403` | Rol no autorizado o acceso a un recurso perteneciente a otro criadero |
-| `not_found` | `404` | Recurso inexistente o fuera del criadero del usuario |
+| `request_mismatch` / `forbidden` | `403` | Rol no autorizado, solicitud de corrección ajena o acceso a recurso de otro criadero |
+| `not_found` / `request_not_found` | `404` | Recurso o solicitud de corrección inexistente |
 | `conflict_anillo` | `409` | El anillo completo ya existe en el sistema (mensaje genérico por `SRS-RF003`) |
 | `conflict_email` / `conflict_member_number` | `409` | Correo o número de socio ya registrado |
+| `cage_occupied` | `409` | La jaula ya está ocupada por una pareja activa |
+| `female_active_pair` | `409` | La hembra ya tiene pareja activa |
+| `request_not_approved` / `request_already_closed` | `409` | La solicitud de corrección no está aprobada o ya fue aplicada |
 | `active_pairs_conflict` | `409` | Ejemplar participa en parejas activas/finalizadas al intentar corregir su sexo |
 | `pairs_with_matings_conflict` / `matings_annul_conflict` | `409` | Una pareja con cruces registrados no puede anularse; debe reasignarse en Modo de Corrección |
 | `consanguinity_conflict` | `409` | Un ejemplar no puede ser progenitor en la pareja de la que es cría |
@@ -1110,15 +1116,15 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | `invalid_state` / `already_active` / `already_closed` | `409` | Transición de estado inválida en solicitud de corrección o modo de operación |
 | `duplicate_file` | `409` | Ya existe un respaldo registrado con ese nombre de archivo |
 | `conflict` | `409` | Restricción de negocio o integridad referencial (`23503`, `23505` o trigger `P0001`) |
-| `invalid_data` / `invalid_reference` / `emergency_incomplete` | `422` | Error de formato, referencia inexistente/ajena o cierre de emergencia sin diagnóstico y acciones |
+| `correction_field_mismatch` | `422` | Se intentó modificar un campo distinto al aprobado en la solicitud de corrección |
+| `invalid_data` / `invalid_reference` / `emergency_incomplete` | `422` | Error de formato, temporada futura, referencia inexistente/ajena o cierre de emergencia sin diagnóstico y acciones |
 
 ---
 
 ## 8. Pendiente de coordinar
 
 - **Métricas de dashboard (`ProgressController` / `SortController`):** los controladores bajo `Controllers/Api/` (excepto `WikiController`) permanecen vacíos y sin rutas registradas; coordinar con Frontend si se requieren vistas agregadas de avance de temporada o rankings.
-- **Sincronización con Frontend:** comunicar la incorporación de:
-  - Modo de Corrección (`X-Correction-Mode: true` / `modo_correccion: true`) en `PATCH /api/v1/canarios/{id}` y `PATCH /api/v1/parejas/{id}`.
-  - Flujo de solicitudes de corrección (`/api/v1/solicitudes-correccion` y `/api/v1/admin/solicitudes-correccion`).
-  - Árbol de ascendencia (`GET /api/v1/canarios/{id}/ascendencia` y `GET /api/v1/crias/{id}/ascendencia`).
-  - Panel administrativo de modos de operación (`/api/v1/admin/modo-operacion`), auditoría (`/api/v1/admin/auditoria`) y respaldos (`/api/v1/admin/respaldos`).
+- **Sincronización con Frontend:** comunicar los ajustes acordados:
+  - Modo de Corrección en `PATCH /api/v1/canarios/{id}` exige `id_solicitud` aprobada, `password` del criador (`RF031`), `motivo` y modifica únicamente `sexo` o `id_variedad` (sin cambios de `anillo`), cerrando la solicitud automáticamente (`RF033`).
+  - Alta de crías sin `sexo` ni `id_variedad` (`RF019`, `RF020`) mediante `POST /api/v1/crias` en una única petición transaccional.
+  - Mensajes diferenciados en `POST`/`PATCH /api/v1/parejas` (`"La jaula ya está ocupada por una pareja activa."` / `"La hembra ya tiene pareja activa."`).

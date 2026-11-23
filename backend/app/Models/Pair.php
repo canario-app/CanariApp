@@ -61,6 +61,8 @@ class Pair extends BaseModel {
     private const ERROR_INVALID_REFERENCE = 'invalid_reference';
     private const ERROR_NOT_FOUND = 'not_found';
     private const ERROR_CONFLICT = 'conflict';
+    private const ERROR_CAGE_OCCUPIED = 'cage_occupied';
+    private const ERROR_FEMALE_ACTIVE_PAIR = 'female_active_pair';
     private const ERROR_CORRECTION_REQUIRED = 'correction_mode_required';
     private const ERROR_MATINGS_ANNUL_CONFLICT = 'matings_annul_conflict';
     private const ERROR_CONSANGUINITY = 'consanguinity_conflict';
@@ -71,11 +73,11 @@ class Pair extends BaseModel {
      * @return array<string, mixed>|null
      */
     public function findDetailed(int $id): ?array {
-        $sql =$this->detailedSelect()
+        $sql = $this->detailedSelect()
             . ' WHERE p.id_pareja = :id_pareja'
             . ' LIMIT 1';
 
-        return $this->fetch($sql, ['id_pareja' =>$id]);
+        return $this->fetch($sql, ['id_pareja' => $id]);
     }
 
     /**
@@ -84,33 +86,38 @@ class Pair extends BaseModel {
      * @param array<string, mixed> $filters
      * @return array<int, array<string, mixed>>
      */
-    public function findAllForBreeder(int $id_criador, array $filters = []): array {$conditions = ['p.id_criador = :id_criador'];
-        $params = ['id_criador' =>$id_criador];
+    public function findAllForBreeder(int $id_criador, array $filters = []): array {
+        $conditions = ['p.id_criador = :id_criador'];
+        $params = ['id_criador' => $id_criador];
 
-        $estado =$filters['estado'] ?? null;
-        if (is_string($estado) && in_array($estado, self::ALLOWED_STATES, true)) {$conditions[] = 'p.estado = :estado';
-            $params['estado'] =$estado;
+        $estado = $filters['estado'] ?? null;
+        if (is_string($estado) && in_array($estado, self::ALLOWED_STATES, true)) {
+            $conditions[] = 'p.estado = :estado';
+            $params['estado'] = $estado;
         }
 
-        foreach (['id_macho', 'id_hembra', 'id_jaula'] as $field) {$value = $filters[$field] ?? null;
-            if (is_scalar($value) && trim((string) $value) !== '') {$intVal = $this->positiveInt($value);
-                if ($intVal !== null) {$conditions[] = 'p.' . $field . ' = :' .$field;
-                    $params[$field] =$intVal;
+        foreach (['id_macho', 'id_hembra', 'id_jaula'] as $field) {
+            $value = $filters[$field] ?? null;
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                $intVal = $this->positiveInt($value);
+                if ($intVal !== null) {
+                    $conditions[] = 'p.' . $field . ' = :' . $field;
+                    $params[$field] = $intVal;
                 }
             }
         }
 
-        $sql =$this->detailedSelect()
+        $sql = $this->detailedSelect()
             . ' WHERE ' . implode(' AND ', $conditions)
             . ' ORDER BY p.id_pareja DESC';
 
-        return $this->fetchAll($sql,$params);
+        return $this->fetchAll($sql, $params);
     }
 
     /**
      * Verifica si una pareja pertenece al criador indicado.
      */
-    public function belongsToBreeder(int $id_pareja, int$id_criador): bool {
+    public function belongsToBreeder(int $id_pareja, int $id_criador): bool {
         return $this->existsBy([
             'id_pareja'  => $id_pareja,
             'id_criador' => $id_criador,
@@ -122,7 +129,7 @@ class Pair extends BaseModel {
      *
      * @param array<string, mixed> $data
      */
-    public function createForBreeder(array $data, int$id_criador): int|string {
+    public function createForBreeder(array $data, int $id_criador): int|string {
         $payload = array_intersect_key($data, array_flip(self::CREATABLE_FIELDS));
 
         foreach (['id_macho', 'id_hembra', 'id_jaula'] as $required_id) {
@@ -132,20 +139,21 @@ class Pair extends BaseModel {
             $payload[$required_id] = (int) $payload[$required_id];
         }
 
-        if ($payload['id_macho'] ===$payload['id_hembra']) {
+        if ($payload['id_macho'] === $payload['id_hembra']) {
             return self::ERROR_INVALID_DATA;
         }
 
-        if (array_key_exists('fecha_formacion', $payload) && $payload['fecha_formacion'] !== null &&$payload['fecha_formacion'] !== '') {
-            if (!is_string($payload['fecha_formacion']) || preg_match('/^\d{4}-\d{2}-\d{2}$/',$payload['fecha_formacion']) !== 1) {
+        if (array_key_exists('fecha_formacion', $payload) && $payload['fecha_formacion'] !== null && $payload['fecha_formacion'] !== '') {
+            if (!is_string($payload['fecha_formacion']) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $payload['fecha_formacion']) !== 1) {
                 return self::ERROR_INVALID_DATA;
             }
         } else {
             unset($payload['fecha_formacion']);
         }
 
-        $payload['id_criador'] =$id_criador;
-        $payload['estado'] = 'activa';$payload['fecha_fin'] = null;
+        $payload['id_criador'] = $id_criador;
+        $payload['estado'] = 'activa';
+        $payload['fecha_fin'] = null;
 
         try {
             $id = $this->insert($payload);
@@ -206,54 +214,60 @@ class Pair extends BaseModel {
      * Actualiza una pareja con Modo de Corrección activo (SRS-RF031).
      *
      * Permite reasignar id_macho o id_hembra dentro de una transacción,
-     * respetando las validaciones de sexo, criadero, límite de parejas activas
-     * y consanguinidad directa verificadas por trg_validar_pareja.
+     * respetando las validaciones de sexo, criadero y consanguinidad directa
+     * verificadas por trg_validar_pareja.
      *
      * @param array<string, mixed> $data
      * @return array{previous: array<string, mixed>, updated: array<string, mixed>}|string
      */
-    public function updateWithCorrection(int $id_pareja, array $data, int$id_criador): array|string {
+    public function updateWithCorrection(int $id_pareja, array $data, int $id_criador): array|string {
         $payload = array_intersect_key($data, array_flip(self::CORRECTION_UPDATABLE_FIELDS));
 
         try {
             $this->beginTransaction();
 
-            $current =$this->fetch(
+            $current = $this->fetch(
                 'SELECT * FROM ' . $this->quoteIdentifier($this->table)
                 . ' WHERE id_pareja = :id_pareja AND id_criador = :id_criador FOR UPDATE',
-                ['id_pareja' => $id_pareja, 'id_criador' =>$id_criador]
+                ['id_pareja' => $id_pareja, 'id_criador' => $id_criador]
             );
 
-            if ($current === null) {$this->rollBack();
+            if ($current === null) {
+                $this->rollBack();
 
                 return self::ERROR_NOT_FOUND;
             }
 
-            if ($payload === []) {$this->commit();
-                $detailed =$this->findDetailed($id_pareja) ?? $current;
+            if ($payload === []) {
+                $this->commit();
+                $detailed = $this->findDetailed($id_pareja) ?? $current;
 
-                return ['previous' => $current, 'updated' =>$detailed];
+                return ['previous' => $current, 'updated' => $detailed];
             }
 
-            $normalized =$this->validateAndNormalizeUpdatePayload($payload,$current);
-            if (is_string($normalized)) {$this->rollBack();
+            $normalized = $this->validateAndNormalizeUpdatePayload($payload, $current);
+            if (is_string($normalized)) {
+                $this->rollBack();
 
                 return $normalized;
             }
 
             $this->updateBy(
-                ['id_pareja' => $id_pareja, 'id_criador' => $id_criador],$normalized
+                ['id_pareja' => $id_pareja, 'id_criador' => $id_criador],
+                $normalized
             );
 
             $this->commit();
-        } catch (PDOException $exception) {$this->rollBack();
+        } catch (PDOException $exception) {
+            $this->rollBack();
 
             return $this->mapWriteException($exception);
-        } catch (Throwable $exception) {$this->rollBack();
+        } catch (Throwable $exception) {
+            $this->rollBack();
             throw $exception;
         }
 
-        $updated =$this->findDetailed($id_pareja) ?? $current;
+        $updated = $this->findDetailed($id_pareja) ?? $current;
 
         return [
             'previous' => $current,
@@ -268,16 +282,20 @@ class Pair extends BaseModel {
      * @param array<string, mixed> $current
      * @return array<string, mixed>|string
      */
-    private function validateAndNormalizeUpdatePayload(array $payload, array$current): array|string {
+    private function validateAndNormalizeUpdatePayload(array $payload, array $current): array|string {
         foreach (['id_macho', 'id_hembra', 'id_jaula'] as $fkField) {
-            if (array_key_exists($fkField,$payload)) {
-                $idValue =$this->positiveInt($payload[$fkField]);
-                if ($idValue === null) { return self::ERROR_INVALID_DATA; }$payload[$fkField] =$idValue;
+            if (array_key_exists($fkField, $payload)) {
+                $idValue = $this->positiveInt($payload[$fkField]);
+                if ($idValue === null) {
+                    return self::ERROR_INVALID_DATA;
+                }
+                $payload[$fkField] = $idValue;
             }
         }
 
-        $effectiveMacho = (int) ($payload['id_macho'] ?? $current['id_macho']);$effectiveHembra = (int) ($payload['id_hembra'] ?? $current['id_hembra']);
-        if ($effectiveMacho ===$effectiveHembra) {
+        $effectiveMacho = (int) ($payload['id_macho'] ?? $current['id_macho']);
+        $effectiveHembra = (int) ($payload['id_hembra'] ?? $current['id_hembra']);
+        if ($effectiveMacho === $effectiveHembra) {
             return self::ERROR_INVALID_DATA;
         }
 
@@ -287,17 +305,18 @@ class Pair extends BaseModel {
             }
 
             if ($payload['estado'] !== 'activa') {
-                if (!array_key_exists('fecha_fin', $payload) || $payload['fecha_fin'] === null || $payload['fecha_fin'] === '') {$payload['fecha_fin'] = date('Y-m-d');
+                if (!array_key_exists('fecha_fin', $payload) || $payload['fecha_fin'] === null || $payload['fecha_fin'] === '') {
+                    $payload['fecha_fin'] = date('Y-m-d');
                 }
             }
         }
 
-        if (array_key_exists('fecha_fin', $payload) && $payload['fecha_fin'] !== null &&$payload['fecha_fin'] !== '') {
-            if (!is_string($payload['fecha_fin']) || preg_match('/^\d{4}-\d{2}-\d{2}$/',$payload['fecha_fin']) !== 1) {
+        if (array_key_exists('fecha_fin', $payload) && $payload['fecha_fin'] !== null && $payload['fecha_fin'] !== '') {
+            if (!is_string($payload['fecha_fin']) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $payload['fecha_fin']) !== 1) {
                 return self::ERROR_INVALID_DATA;
             }
 
-            if (isset($current['fecha_formacion']) && $payload['fecha_fin'] < (string)$current['fecha_formacion']) {
+            if (isset($current['fecha_formacion']) && $payload['fecha_fin'] < (string) $current['fecha_formacion']) {
                 return self::ERROR_INVALID_DATA;
             }
         }
@@ -327,20 +346,20 @@ class Pair extends BaseModel {
         if (is_string($value)) {
             $value = trim($value);
         }
-        if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/',$value) === 1)) {
+        if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/', $value) === 1)) {
             return null;
         }
 
-        $integer = (int)$value;
+        $integer = (int) $value;
 
-        return $integer > 0 ?$integer : null;
+        return $integer > 0 ? $integer : null;
     }
 
     /**
      * Traduce códigos SQLSTATE y mensajes de triggers de PostgreSQL a códigos de dominio.
      */
     private function mapWriteException(PDOException $exception): string {
-        $message =$exception->getMessage();
+        $message = $exception->getMessage();
 
         if (str_contains($message, 'Una pareja con cruces no se anula')) {
             return self::ERROR_MATINGS_ANNUL_CONFLICT;
@@ -350,8 +369,19 @@ class Pair extends BaseModel {
             return self::ERROR_CONSANGUINITY;
         }
 
+        if ((string) $exception->getCode() === '23505') {
+            if (str_contains($message, 'uq_pareja_jaula_activa')) {
+                return self::ERROR_CAGE_OCCUPIED;
+            }
+
+            if (str_contains($message, 'uq_pareja_hembra_activa')) {
+                return self::ERROR_FEMALE_ACTIVE_PAIR;
+            }
+
+            return self::ERROR_CONFLICT;
+        }
+
         return match ((string) $exception->getCode()) {
-            '23505' => self::ERROR_CONFLICT,
             '23503' => self::ERROR_INVALID_REFERENCE,
             '23502', '23514', '22P02', '22007' => self::ERROR_INVALID_DATA,
             'P0001' => self::ERROR_CONFLICT,

@@ -406,16 +406,18 @@ class PairController {
     }
 
     /**
-     * Traduce códigos de error de dominio a respuestas HTTP.
+     * Traduce códigos de error de dominio a respuestas HTTP con mensajes específicos por regla.
      */
     private function respondDomainError(string $code): void {
         match ($code) {
             'correction_mode_required' => ResponseHelper::forbidden('Debe activar el Modo de Corrección para reasignar el macho o la hembra de una pareja.'),
             'not_found'                => ResponseHelper::notFound('Pareja no encontrada.'),
             'invalid_reference'        => ResponseHelper::validationError(['referencia' => 'El ejemplar o la jaula no existen o no pertenecen a tu criadero.'], 'Referencia inválida.'),
+            'cage_occupied'            => ResponseHelper::conflict('La jaula ya está ocupada por una pareja activa.'),
+            'female_active_pair'       => ResponseHelper::conflict('La hembra ya tiene pareja activa.'),
             'matings_annul_conflict'   => ResponseHelper::conflict('Una pareja con cruces registrados no puede anularse; debe reasignarse en Modo de Corrección.'),
             'consanguinity_conflict'   => ResponseHelper::conflict('Un ejemplar no puede ser progenitor en la pareja de la que es cría.'),
-            'conflict'                 => ResponseHelper::conflict('Conflicto con las reglas de pareja o jaula activa (máximo 6 parejas activas por macho, 1 activa por hembra, 1 activa por jaula, o restricción de estado).'),
+            'conflict'                 => ResponseHelper::conflict('No se pudo registrar o actualizar la pareja por una restricción de estado o ciclo de vida.'),
             default                    => ResponseHelper::validationError(['datos' => 'Los datos o fechas de la pareja no son válidos.'], 'Error de validación.'),
         };
     }
