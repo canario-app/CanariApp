@@ -11,6 +11,7 @@ use CanariApp\Backend\Controllers\BreederController;
 use CanariApp\Backend\Controllers\CageController;
 use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\ChickController;
+use CanariApp\Backend\Controllers\CorrectionRequestController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\MatingController;
 use CanariApp\Backend\Controllers\NestController;
@@ -46,7 +47,7 @@ final class Router {
         });
 
         // Solo el rol criador puede acceder a los módulos operativos de crianza (administrador recibe 403)
-        $breederRoutes = '/api/v1/(?:criador|canarios|jaulas|parejas|cruces|nidadas|crias|titulos|simulaciones)(?:/.*)?';
+        $breederRoutes = '/api/v1/(?:criador|canarios|jaulas|parejas|cruces|nidadas|crias|titulos|simulaciones|solicitudes-correccion)(?:/.*)?';
         $this->router->before('GET|POST|PUT|PATCH|DELETE', $breederRoutes, function (): void {
             AuthMiddleware::requireRole('criador');
         });
@@ -72,12 +73,23 @@ final class Router {
         $this->router->post('/api/v1/admin/criadores', BreederController::class . '@store');
         $this->router->put('/api/v1/admin/criadores/(\d+)', BreederController::class . '@update');
 
+        // Gestión administrativa de solicitudes de corrección (SRS-RF033)
+        $this->router->get('/api/v1/admin/solicitudes-correccion', CorrectionRequestController::class . '@adminIndex');
+        $this->router->get('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@adminShow');
+        $this->router->patch('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@resolve');
+
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
         $this->router->get('/api/v1/canarios/(\d+)', CanaryController::class . '@show');
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
+
+        // Solicitudes de corrección del criador (SRS-RF033)
+        $this->router->get('/api/v1/solicitudes-correccion', CorrectionRequestController::class . '@index');
+        $this->router->get('/api/v1/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@show');
+        $this->router->post('/api/v1/solicitudes-correccion', CorrectionRequestController::class . '@store');
+        $this->router->patch('/api/v1/solicitudes-correccion/(\d+)/cancelar', CorrectionRequestController::class . '@cancel');
 
         // Jaulas: solo el criador autenticado, dentro de su propio criadero.
         $this->router->get('/api/v1/jaulas', CageController::class . '@index');
