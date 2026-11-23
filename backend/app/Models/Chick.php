@@ -253,18 +253,23 @@ class Chick extends BaseModel {
     }
 
     /**
-     * Consulta SELECT base con datos de cría, nidada, canario y mutación.
+     * Consulta SELECT base con datos de cría, nidada, canario, progenitores y mutación.
      */
     private function detailedSelect(): string {
         return 'SELECT cr.id_cria, cr.id_nidada, cr.id_canario,
                        cr.factor_genetico, cr.es_portadora, cr.reservada,
-                       p.id_criador, n.id_cruce, n.fecha_nacimiento,
+                       p.id_criador, p.id_pareja, p.id_macho, p.id_hembra,
+                       cm.anillo AS anillo_macho,
+                       ch.anillo AS anillo_hembra,
+                       n.id_cruce, n.fecha_nacimiento,
                        c.anillo, c.temporada, c.sexo, c.id_variedad,
                        m.nombre AS mutacion_nombre
                   FROM ' . $this->quoteIdentifier($this->table) . ' cr
                   INNER JOIN nidada n ON n.id_nidada = cr.id_nidada
                   INNER JOIN cruce c_cr ON c_cr.id_cruce = n.id_cruce
                   INNER JOIN pareja p ON p.id_pareja = c_cr.id_pareja
+                  INNER JOIN canario cm ON cm.id_canario = p.id_macho
+                  INNER JOIN canario ch ON ch.id_canario = p.id_hembra
                   INNER JOIN canario c ON c.id_canario = cr.id_canario
                   LEFT JOIN mutacion m ON m.id_mutacion = cr.factor_genetico';
     }

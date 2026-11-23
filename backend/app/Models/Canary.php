@@ -24,6 +24,9 @@ class Canary extends BaseModel {
     protected string $table = 'canario';
     protected string $primaryKey = 'id_canario';
 
+    public const DEFAULT_PEDIGREE_GENERATIONS = 4;
+    public const MAX_PEDIGREE_GENERATIONS = 6;
+
     /**
      * Campos que el cliente puede escribir en alta o Modo de Corrección.
      *
@@ -57,6 +60,118 @@ class Canary extends BaseModel {
             . ' LIMIT 1';
 
         return $this->fetch($sql, ['id_canario' => $id]);
+    }
+
+    /**
+     * Reconstruye el árbol de ascendencia (pedigrí) de un ejemplar hasta N generaciones
+     * recorriendo cria -> nidada -> cruce -> pareja (id_macho e id_hembra).
+     *
+     * Si el ejemplar o alguno de sus ancestros no tiene registro en cria
+     * (ejemplar fundador/externo), sus nodos padre y madre se devuelven en null.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findAncestry(int $idCanario, int $maxGenerations = self::DEFAULT_PEDIGREE_GENERATIONS): ?array {
+        $depth = max(1, min($maxGenerations, self::MAX_PEDIGREE_GENERATIONS));
+
+        $sql = '
+            WITH RECURSIVE arbol AS (
+                SELECT
+                    c.id_canario,
+                    0 AS generacion,
+                    ARRAY[c.id_canario] AS ruta
+                FROM canario c
+                WHERE c.id_canario = :root_id
+
+                UNION ALL
+
+                SELECT
+                    progenitor.id_progenitor AS id_canario,
+                    a.generacion + 1 AS generacion,
+                    a.ruta || progenitor.id_progenitor AS ruta
+                FROM arbol a
+                INNER JOIN cria cr ON cr.id_canario = a.id_canario
+                INNER JOIN nidada n ON n.id_nidada = cr.id_nidada
+                INNER JOIN cruce cu ON cu.id_cruce = n.id_cruce
+                INNER JOIN pareja p ON p.id_pareja = cu.id_pareja
+                CROSS JOIN LATERAL (
+                    VALUES (p.id_macho), (p.id_hembra)
+                ) AS progenitor(id_progenitor)
+                WHERE a.generacion < :max_generaciones
+                  AND progenitor.id_progenitor IS NOT NULL
+                  AND NOT (progenitor.id_progenitor = ANY(a.ruta))
+            ),
+            nodos_unicos AS (
+                SELECT id_canario, MIN(generacion) AS generacion_minima
+                FROM arbol
+                GROUP BY id_canario
+            )
+            SELECT
+                nu.generacion_minima,
+                c.id_canario,
+                c.anillo,
+                c.id_club,
+                cl.sigla AS club_sigla,
+                c.numero_socio,
+                c.temporada,
+                c.sexo,
+                c.id_variedad,
+                v.nombre AS variedad_nombre,
+                c.id_criador,
+                c.requiere_revision,
+                cr.id_cria,
+                cr.id_nidada,
+                cr.factor_genetico,
+                cr.es_portadora,
+                cr.reservada,
+                m.nombre AS mutacion_nombre,
+                n.id_cruce,
+                n.fecha_nacimiento,
+                p.id_pareja,
+                p.id_macho,
+                p.id_hembra
+            FROM nodos_unicos nu
+            INNER JOIN canario c ON c.id_canario = nu.id_canario
+            INNER JOIN club cl ON cl.id_club = c.id_club
+            LEFT JOIN variedad v ON v.id_variedad = c.id_variedad
+            LEFT JOIN cria cr ON cr.id_canario = c.id_canario
+            LEFT JOIN nidada n ON n.id_nidada = cr.id_nidada
+            LEFT JOIN cruce cu ON cu.id_cruce = n.id_cruce
+            LEFT JOIN pareja p ON p.id_pareja = cu.id_pareja
+            LEFT JOIN mutacion m ON m.id_mutacion = cr.factor_genetico
+            ORDER BY nu.generacion_minima ASC, c.id_canario ASC
+        ';
+
+        $rows = $this->fetchAll($sql, [
+            'root_id'          => $idCanario,
+            'max_generaciones' => $depth,
+        ]);
+
+        if ($rows === []) {
+            return null;
+        }
+
+        $nodesById = [];
+        $maxDetectedDepth = 0;
+
+        foreach ($rows as $row) {
+            $nodeId = (int) $row['id_canario'];
+            $genMin = (int) $row['generacion_minima'];
+            if ($genMin > $maxDetectedDepth) {
+                $maxDetectedDepth = $genMin;
+            }
+
+            $nodesById[$nodeId] = $row;
+        }
+
+        $tree = $this->buildPedigreeNode($idCanario, $nodesById, 0, $depth);
+
+        return [
+            'generaciones_solicitadas' => $depth,
+            'generaciones_encontradas' => $maxDetectedDepth,
+            'total_ejemplares_arbol'   => count($nodesById),
+            'arbol'                    => $tree,
+        ];
     }
 
     /**
@@ -402,6 +517,85 @@ class Canary extends BaseModel {
             'previous' => $current,
             'updated'  => $updated,
         ];
+    }
+
+    /**
+     * Construye recursivamente un nodo del árbol genealógico (padre y madre).
+     *
+     * @param array<int, array<string, mixed>> $nodesById
+     * @return array<string, mixed>|null
+     */
+    private function buildPedigreeNode(
+        int $canaryId,
+        array $nodesById,
+        int $currentGen,
+        int $maxGenerations
+    ): ?array {
+        $row = $nodesById[$canaryId] ?? null;
+        if ($row === null) {
+            return null;
+        }
+
+        $isFounder = $row['id_cria'] === null;
+        $originChick = $isFounder ? null : [
+            'id_cria'          => (int) $row['id_cria'],
+            'id_nidada'        => (int) $row['id_nidada'],
+            'id_cruce'         => (int) $row['id_cruce'],
+            'id_pareja'        => (int) $row['id_pareja'],
+            'fecha_nacimiento' => $row['fecha_nacimiento'],
+            'factor_genetico'  => $row['factor_genetico'] !== null ? (int) $row['factor_genetico'] : null,
+            'mutacion_nombre'  => $row['mutacion_nombre'],
+            'es_portadora'     => (bool) $row['es_portadora'],
+            'reservada'        => (bool) $row['reservada'],
+        ];
+
+        $fatherId = $row['id_macho'] !== null ? (int) $row['id_macho'] : null;
+        $motherId = $row['id_hembra'] !== null ? (int) $row['id_hembra'] : null;
+        $canExpand = $currentGen < $maxGenerations;
+
+        return [
+            'generacion'          => $currentGen,
+            'parentesco'          => $this->kinshipLabel($currentGen, $row['sexo'] ?? null),
+            'id_canario'          => (int) $row['id_canario'],
+            'anillo'              => $row['anillo'],
+            'id_club'             => (int) $row['id_club'],
+            'club_sigla'          => $row['club_sigla'],
+            'numero_socio'        => $row['numero_socio'],
+            'temporada'           => (int) $row['temporada'],
+            'sexo'                => $row['sexo'],
+            'id_variedad'         => $row['id_variedad'] !== null ? (int) $row['id_variedad'] : null,
+            'variedad_nombre'     => $row['variedad_nombre'],
+            'id_criador'          => (int) $row['id_criador'],
+            'requiere_revision'   => (bool) $row['requiere_revision'],
+            'es_fundador'         => $isFounder,
+            'origen_cria'         => $originChick,
+            'tiene_mas_ancestros' => !$canExpand && ($fatherId !== null || $motherId !== null),
+            'padre'               => ($canExpand && $fatherId !== null)
+                ? $this->buildPedigreeNode($fatherId, $nodesById, $currentGen + 1, $maxGenerations)
+                : null,
+            'madre'               => ($canExpand && $motherId !== null)
+                ? $this->buildPedigreeNode($motherId, $nodesById, $currentGen + 1, $maxGenerations)
+                : null,
+        ];
+    }
+
+    /**
+     * Etiqueta legible de parentesco según la generación y el sexo del ancestro.
+     */
+    private function kinshipLabel(int $generation, ?string $sex): string {
+        if ($generation === 0) {
+            return 'ejemplar';
+        }
+
+        $isFemale = $sex === 'H';
+
+        return match ($generation) {
+            1 => $isFemale ? 'madre' : 'padre',
+            2 => $isFemale ? 'abuela' : 'abuelo',
+            3 => $isFemale ? 'bisabuela' : 'bisabuelo',
+            4 => $isFemale ? 'tatarabuela' : 'tatarabuelo',
+            default => 'ancestro_generacion_' . $generation,
+        };
     }
 
     /**

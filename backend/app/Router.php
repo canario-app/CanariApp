@@ -106,6 +106,7 @@ final class Router {
 
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
+        $this->router->get('/api/v1/canarios/(\d+)/ascendencia', CanaryController::class . '@ancestry');
         $this->router->get('/api/v1/canarios/(\d+)', CanaryController::class . '@show');
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
@@ -117,12 +118,12 @@ final class Router {
         $this->router->post('/api/v1/solicitudes-correccion', CorrectionRequestController::class . '@store');
         $this->router->patch('/api/v1/solicitudes-correccion/(\d+)/cancelar', CorrectionRequestController::class . '@cancel');
 
-        // Jaulas: solo el criador autenticado, dentro de su propio criadero.
+        // Jaulas: solo el criador autenticado, dentro de su propio criadero
         $this->router->get('/api/v1/jaulas', CageController::class . '@index');
         $this->router->get('/api/v1/jaulas/(\d+)', CageController::class . '@show');
         $this->router->post('/api/v1/jaulas', CageController::class . '@store');
 
-        // Parejas y jaulas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)
+        // Parejas: sin borrado físico (SRS 1.2, ciclo de vida en BD v7.1)
         $this->router->get('/api/v1/parejas', PairController::class . '@index');
         $this->router->get('/api/v1/parejas/(\d+)', PairController::class . '@show');
         $this->router->post('/api/v1/parejas', PairController::class . '@store');
@@ -135,7 +136,7 @@ final class Router {
         $this->router->get('/api/v1/cruces/(\d+)', MatingController::class . '@show');
         $this->router->post('/api/v1/cruces', MatingController::class . '@store');
 
-        // Nidadas: asociadas a un cruce; sin edición ni borrado en este alcance (SRS-RF018, SQL-01).
+        // Nidadas: asociadas a un cruce; sin edición ni borrado en este alcance (SRS-RF018, SQL-01)
         $this->router->get('/api/v1/nidadas', NestController::class . '@index');
         $this->router->get('/api/v1/nidadas/cruce/(\d+)', NestController::class . '@byMating');
         $this->router->get('/api/v1/nidadas/(\d+)', NestController::class . '@show');
@@ -144,6 +145,7 @@ final class Router {
         // Crías: asociadas a una nidada y a un canario; sin borrado físico
         $this->router->get('/api/v1/crias', ChickController::class . '@index');
         $this->router->get('/api/v1/crias/nidada/(\d+)', ChickController::class . '@byNest');
+        $this->router->get('/api/v1/crias/(\d+)/ascendencia', ChickController::class . '@ancestry');
         $this->router->get('/api/v1/crias/(\d+)', ChickController::class . '@show');
         $this->router->post('/api/v1/crias', ChickController::class . '@store');
         $this->router->put('/api/v1/crias/(\d+)', ChickController::class . '@update');

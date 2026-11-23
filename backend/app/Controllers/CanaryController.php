@@ -420,6 +420,19 @@ class CanaryController {
         return (int) $value;
     }
 
+    private function parseGenerationsParam(mixed $raw): ?int {
+        if ($raw === null || (is_string($raw) && trim($raw) === '')) {
+            return Canary::DEFAULT_PEDIGREE_GENERATIONS;
+        }
+
+        $value = $this->positiveInt($raw);
+        if ($value === null || $value > Canary::MAX_PEDIGREE_GENERATIONS) {
+            return null;
+        }
+
+        return $value;
+    }
+
     private function positiveInt(mixed $value): ?int {
         if (!is_int($value) && !(is_string($value) && preg_match('/^[0-9]+$/', trim($value)) === 1)) {
             return null;
@@ -453,5 +466,34 @@ class CanaryController {
         }
 
         return $decoded;
+    }
+
+    /**
+     * [Criador] Devuelve el árbol de ascendencia (pedigrí) de un canario propio.
+     * Admite ?generaciones=1..6 (por defecto 4).
+     */
+    public function ancestry(int|string $id): void {
+        $this->ensureBreederRole();
+
+        $idCanario = $this->parseId($id);
+        $generaciones = $this->parseGenerationsParam($_GET['generaciones'] ?? null);
+        if ($generaciones === null) {
+            ResponseHelper::badRequest(
+                'El parámetro generaciones debe ser un entero entre 1 y ' . Canary::MAX_PEDIGREE_GENERATIONS . '.'
+            );
+        }
+
+        $model = new Canary();
+        $canario = $model->findDetailed($idCanario);
+
+        if ($canario === null) {
+            ResponseHelper::notFound('Canario no encontrado.');
+        }
+
+        $this->assertVisible($canario);
+
+        $pedigree = $model->findAncestry($idCanario, $generaciones);
+
+        ResponseHelper::success($pedigree, 'Ascendencia del canario obtenida.');
     }
 }
