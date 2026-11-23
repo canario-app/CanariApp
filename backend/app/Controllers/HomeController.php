@@ -88,6 +88,12 @@ class HomeController {
                     'GET /api/v1/cruces/{id}',
                     'POST /api/v1/cruces',
                 ],
+                'nests' => [
+                    'GET /api/v1/nidadas',
+                    'GET /api/v1/nidadas/cruce/{id}',
+                    'GET /api/v1/nidadas/{id}',
+                    'POST /api/v1/nidadas',
+                ],
                 'catalogs' => [
                     'GET /api/v1/wiki',
                     'GET /api/v1/wiki/clubes',
