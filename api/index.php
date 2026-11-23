@@ -12,6 +12,11 @@ require $root . '/vercel/bootstrap.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
+if ($path === '/__setup') {
+    require $root . '/vercel/setup.php';
+    return;
+}
+
 if ($path === '/api' || str_starts_with($path, '/api/')) {
     $_SERVER['SCRIPT_NAME'] = '/index.php';
     chdir($root . '/backend/public');

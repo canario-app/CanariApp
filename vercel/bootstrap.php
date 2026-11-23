@@ -7,10 +7,17 @@
  */
 declare(strict_types=1);
 
+// Conexión directa (sin pooler) para que funcionen los prepared statements de PDO
+if (!getenv('DB_HOST') && getenv('PGHOST_UNPOOLED')) {
+    putenv('DB_HOST=' . getenv('PGHOST_UNPOOLED'));
+}
 foreach (['DB_HOST' => 'PGHOST', 'DB_NAME' => 'PGDATABASE', 'DB_USER' => 'PGUSER', 'DB_PASSWORD' => 'PGPASSWORD'] as $dst => $src) {
     if (!getenv($dst) && getenv($src)) {
         putenv("$dst=" . getenv($src));
     }
+}
+if (!getenv('DB_SSLMODE')) {
+    putenv('DB_SSLMODE=require');
 }
 foreach (['APP_ENV', 'APP_DEBUG', 'APP_URL', 'APP_TIMEZONE', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET', 'JWT_EXPIRATION', 'API_URL'] as $k) {
     if (getenv($k) !== false) {
