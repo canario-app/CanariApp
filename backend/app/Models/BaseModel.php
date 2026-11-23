@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace CanariApp\Backend\Models;
 
 use CanariApp\Backend\Config\Db;
+use CanariApp\Backend\Helpers\AuditHelper;
+use CanariApp\Backend\Middlewares\AuthMiddleware;
 use InvalidArgumentException;
 use LogicException;
 use PDO;
@@ -14,13 +16,13 @@ use Throwable;
 /**
  * Base para los modelos de la aplicación.
  *
- * Se conecta automáticamente usando Config\Db por defecto, 
+ * Se conecta automáticamente usando Config\Db por defecto,
  * pero permite inyectar una conexión PDO diferente para facilitar las pruebas.
  *
  * Todas las consultas usan sentencias preparadas. Los nombres de tablas y
  * columnas se validan y citan; nunca deben venir directamente del usuario.
  */
-abstract class BaseModel{
+abstract class BaseModel {
     protected PDO $db;
 
     /** Nombre de la tabla. Cada modelo hijo debe definirlo. */
@@ -32,20 +34,19 @@ abstract class BaseModel{
     /**
      * @param PDO|null $db Conexión opcional (para testing). Si es null, usa la global.
      */
-    public function __construct(?PDO $db = null){
-        // Usa la conexión pasada, o llama al Singleton de tu configuración
+    public function __construct(?PDO $db = null) {
         $this->db = $db ?? Db::getConnection();
     }
 
-    public function getConnection(): PDO{
+    public function getConnection(): PDO {
         return $this->db;
     }
 
-    public function getTable(): string{
+    public function getTable(): string {
         return $this->table;
     }
 
-    public function getPrimaryKey(): string{
+    public function getPrimaryKey(): string {
         return $this->primaryKey;
     }
 
@@ -54,7 +55,7 @@ abstract class BaseModel{
      *
      * @param array<int|string, mixed> $params Parámetros posicionales (0-based) o nombrados.
      */
-    public function query(string $sql, array $params = []): PDOStatement{
+    public function query(string $sql, array $params = []): PDOStatement {
         $statement = $this->db->prepare($sql);
 
         foreach ($params as $key => $value) {
@@ -74,7 +75,7 @@ abstract class BaseModel{
      * @param array<int|string, mixed> $params
      * @return array<string, mixed>|null
      */
-    public function fetch(string $sql, array $params = []): ?array{
+    public function fetch(string $sql, array $params = []): ?array {
         $row = $this->query($sql, $params)->fetch(PDO::FETCH_ASSOC);
 
         return $row === false ? null : $row;
@@ -86,7 +87,7 @@ abstract class BaseModel{
      * @param array<int|string, mixed> $params
      * @return array<int, array<string, mixed>>
      */
-    public function fetchAll(string $sql, array $params = []): array{
+    public function fetchAll(string $sql, array $params = []): array {
         return $this->query($sql, $params)->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -95,7 +96,7 @@ abstract class BaseModel{
      *
      * @param array<int|string, mixed> $params
      */
-    public function fetchColumn(string $sql, array $params = [], int $column = 0): mixed{
+    public function fetchColumn(string $sql, array $params = [], int $column = 0): mixed {
         $row = $this->query($sql, $params)->fetch(PDO::FETCH_NUM);
 
         if ($row === false || !array_key_exists($column, $row)) {
@@ -110,7 +111,7 @@ abstract class BaseModel{
      *
      * @param array<int|string, mixed> $params
      */
-    public function execute(string $sql, array $params = []): int{
+    public function execute(string $sql, array $params = []): int {
         return $this->query($sql, $params)->rowCount();
     }
 
@@ -120,15 +121,12 @@ abstract class BaseModel{
      * @param array<int, string> $columns
      * @return array<string, mixed>|null
      */
-    public function find(mixed $id, array $columns = ['*']): ?array{
+    public function find(mixed $id, array $columns = ['*']): ?array {
         return $this->findBy([$this->primaryKey => $id], $columns);
     }
 
     /**
      * Busca la primera fila que cumpla las condiciones.
-     *
-     * Las condiciones son igualdad por columna. Un valor null genera IS NULL
-     * y un arreglo genera IN (...).
      *
      * @param array<string, mixed> $conditions
      * @param array<int, string> $columns
@@ -191,11 +189,11 @@ abstract class BaseModel{
     }
 
     /**
-     * Inserta una fila y devuelve el ID generado cuando la BD lo permite.
+     * Inserta una fila, devuelve el ID generado y registra auditoría si hay sesión activa.
      *
      * @param array<string, mixed> $data
      */
-    public function insert(array $data): int|string|null{
+    public function insert(array $data): int|string|null {
         if ($data === []) {
             throw new InvalidArgumentException('No hay datos para insertar.');
         }
@@ -219,24 +217,37 @@ abstract class BaseModel{
         // PostgreSQL permite obtener el ID de forma fiable con RETURNING.
         if ($this->driver() === 'pgsql') {
             $sql .= ' RETURNING ' . $this->quoteIdentifier($this->primaryKey);
-
-            return $this->normalizeInsertId($this->fetchColumn($sql, $data));
+            $insertedId = $this->normalizeInsertId($this->fetchColumn($sql, $data));
+        } else {
+            $this->query($sql, $data);
+            $insertedId = $this->normalizeInsertId($this->db->lastInsertId());
         }
 
-        $this->query($sql, $data);
+        if ($this->shouldAutoAudit()) {
+            AuditHelper::log(
+                action: 'insert',
+                entity: $this->table,
+                recordId: is_int($insertedId) ? $insertedId : null,
+                newValue: $data,
+                db: $this->db
+            );
+        }
 
-        return $this->normalizeInsertId($this->db->lastInsertId());
+        return $insertedId;
     }
 
     /**
-     * Actualiza una fila por su clave primaria.
+     * Actualiza una fila por su clave primaria y registra auditoría si hay sesión activa.
      *
      * @param array<string, mixed> $data
      */
-    public function update(mixed $id, array $data): int{
+    public function update(mixed $id, array $data): int {
         if ($data === []) {
             throw new InvalidArgumentException('No hay datos para actualizar.');
         }
+
+        $shouldAudit = $this->shouldAutoAudit();
+        $previousRow = $shouldAudit ? $this->find($id) : null;
 
         $assignments = [];
         $params = ['id' => $id];
@@ -256,13 +267,26 @@ abstract class BaseModel{
             $this->quoteIdentifier($this->primaryKey)
         );
 
-        return $this->execute($sql, $params);
+        $affected = $this->execute($sql, $params);
+
+        if ($shouldAudit && $affected > 0) {
+            AuditHelper::log(
+                action: 'update',
+                entity: $this->table,
+                recordId: $this->toIntId($id),
+                previousValue: $previousRow,
+                newValue: $data,
+                db: $this->db
+            );
+        }
+
+        return $affected;
     }
 
     /**
      * Elimina una fila por su clave primaria.
      */
-    public function delete(mixed $id): int{
+    public function delete(mixed $id): int {
         $sql = sprintf(
             'DELETE FROM %s WHERE %s = :id',
             $this->tableName(),
@@ -277,7 +301,7 @@ abstract class BaseModel{
      *
      * @param array<string, mixed> $conditions
      */
-    public function count(array $conditions = []): int{
+    public function count(array $conditions = []): int {
         [$where, $params] = $this->buildWhere($conditions);
 
         $sql = sprintf(
@@ -292,19 +316,16 @@ abstract class BaseModel{
     /**
      * Comprueba si existe una fila con la clave primaria indicada.
      */
-    public function exists(mixed $id): bool{
+    public function exists(mixed $id): bool {
         return $this->count([$this->primaryKey => $id]) > 0;
     }
 
     /**
      * Comprueba si existe al menos una fila que cumpla las condiciones.
      *
-     * Las condiciones usan la misma semántica que findAllBy(): igualdad por
-     * columna, null genera IS NULL y un arreglo genera IN (...).
-     *
      * @param array<string, mixed> $conditions
      */
-    public function existsBy(array $conditions): bool{
+    public function existsBy(array $conditions): bool {
         if ($conditions === []) {
             throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
         }
@@ -313,15 +334,12 @@ abstract class BaseModel{
     }
 
     /**
-     * Actualiza todas las filas que cumplan las condiciones.
-     *
-     * Devuelve la cantidad de filas afectadas. En PostgreSQL una fila puede
-     * contar como afectada aunque sus valores no cambien.
+     * Actualiza todas las filas que cumplan las condiciones y registra auditoría.
      *
      * @param array<string, mixed> $conditions
      * @param array<string, mixed> $data
      */
-    public function updateBy(array $conditions, array $data): int{
+    public function updateBy(array $conditions, array $data): int {
         if ($conditions === []) {
             throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
         }
@@ -329,6 +347,9 @@ abstract class BaseModel{
         if ($data === []) {
             throw new InvalidArgumentException('No hay datos para actualizar.');
         }
+
+        $shouldAudit = $this->shouldAutoAudit();
+        $previousRows = $shouldAudit ? $this->findAllBy($conditions) : [];
 
         [$where, $params] = $this->buildWhere($conditions);
 
@@ -349,17 +370,31 @@ abstract class BaseModel{
             $where
         );
 
-        return $this->execute($sql, $params);
+        $affected = $this->execute($sql, $params);
+
+        if ($shouldAudit && $affected > 0) {
+            foreach ($previousRows as $previousRow) {
+                $recordId = $this->toIntId($previousRow[$this->primaryKey] ?? null);
+                AuditHelper::log(
+                    action: 'update',
+                    entity: $this->table,
+                    recordId: $recordId,
+                    previousValue: $previousRow,
+                    newValue: $data,
+                    db: $this->db
+                );
+            }
+        }
+
+        return $affected;
     }
 
     /**
      * Elimina todas las filas que cumplan las condiciones.
      *
-     * Devuelve la cantidad de filas eliminadas.
-     *
      * @param array<string, mixed> $conditions
      */
-    public function deleteBy(array $conditions): int{
+    public function deleteBy(array $conditions): int {
         if ($conditions === []) {
             throw new InvalidArgumentException('Las condiciones no pueden estar vacías.');
         }
@@ -373,10 +408,8 @@ abstract class BaseModel{
 
     /**
      * Ejecuta un callback dentro de una transacción.
-     *
-     * Si el callback lanza una excepción, se hace rollback y se relanza.
      */
-    public function transaction(callable $callback): mixed{
+    public function transaction(callable $callback): mixed {
         $this->db->beginTransaction();
 
         try {
@@ -396,11 +429,11 @@ abstract class BaseModel{
         }
     }
 
-    public function beginTransaction(): bool{
+    public function beginTransaction(): bool {
         return $this->db->beginTransaction();
     }
 
-    public function commit(): bool{
+    public function commit(): bool {
         return $this->db->commit();
     }
 
@@ -408,14 +441,14 @@ abstract class BaseModel{
         return $this->db->inTransaction() ? $this->db->rollBack() : false;
     }
 
-    public function inTransaction(): bool{
+    public function inTransaction(): bool {
         return $this->db->inTransaction();
     }
 
     /**
      * Valida y cita un nombre de tabla o columna.
      */
-    public function quoteIdentifier(string $identifier): string{
+    public function quoteIdentifier(string $identifier): string {
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) !== 1) {
             throw new InvalidArgumentException(
                 sprintf('Identificador SQL inválido: "%s".', $identifier)
@@ -428,10 +461,32 @@ abstract class BaseModel{
     }
 
     /**
+     * Determina si corresponde auditar automáticamente la escritura actual.
+     */
+    private function shouldAutoAudit(): bool {
+        return AuditHelper::isAutoAuditEnabled()
+            && $this->table !== ''
+            && $this->table !== 'auditoria'
+            && AuthMiddleware::userId() !== null;
+    }
+
+    private function toIntId(mixed $value): ?int {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return null;
+    }
+
+    /**
      * @param array<string, mixed> $conditions
      * @return array{0: string, 1: array<string, mixed>}
      */
-    protected function buildWhere(array $conditions): array{
+    protected function buildWhere(array $conditions): array {
         if ($conditions === []) {
             return ['', []];
         }
@@ -477,7 +532,7 @@ abstract class BaseModel{
     /**
      * @param array<string, string>|array<int, string> $orderBy
      */
-    protected function buildOrderBy(array $orderBy): string{
+    protected function buildOrderBy(array $orderBy): string {
         if ($orderBy === []) {
             return '';
         }
@@ -511,7 +566,7 @@ abstract class BaseModel{
         return ' ORDER BY ' . implode(', ', $parts);
     }
 
-    protected function buildLimitOffset(?int $limit, int $offset): string{
+    protected function buildLimitOffset(?int $limit, int $offset): string {
         $sql = '';
 
         if ($limit !== null) {
@@ -528,7 +583,7 @@ abstract class BaseModel{
     /**
      * @param array<int, string> $columns
      */
-    protected function columnList(array $columns): string{
+    protected function columnList(array $columns): string {
         if ($columns === [] || in_array('*', $columns, true)) {
             return '*';
         }
@@ -539,7 +594,7 @@ abstract class BaseModel{
         ));
     }
 
-    protected function tableName(): string{
+    protected function tableName(): string {
         if ($this->table === '') {
             throw new LogicException('El modelo no definió la propiedad $table.');
         }
@@ -547,11 +602,11 @@ abstract class BaseModel{
         return $this->quoteIdentifier($this->table);
     }
 
-    protected function driver(): string{
+    protected function driver(): string {
         return (string) $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
     }
 
-    protected function paramType(mixed $value): int{
+    protected function paramType(mixed $value): int {
         return match (true) {
             $value === null => PDO::PARAM_NULL,
             is_bool($value) => PDO::PARAM_BOOL,
@@ -560,7 +615,7 @@ abstract class BaseModel{
         };
     }
 
-    protected function normalizeInsertId(mixed $id): int|string|null{
+    protected function normalizeInsertId(mixed $id): int|string|null {
         if ($id === false || $id === null || $id === '') {
             return null;
         }

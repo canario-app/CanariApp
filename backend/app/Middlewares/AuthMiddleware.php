@@ -62,7 +62,7 @@ final class AuthMiddleware {
 
         return $matches[1];
     }
-    
+
     /**
      * Devuelve el rol del usuario autenticado ('criador' o 'administrador').
      */
@@ -72,9 +72,12 @@ final class AuthMiddleware {
 
     /**
      * Exige que el usuario autenticado tenga un rol específico (ej. 'administrador').
+     * Reutiliza el usuario ya validado por handle() en la petición actual.
      */
     public static function requireRole(string $requiredRole): void {
-        self::handle();
+        if (self::$currentUser === null) {
+            self::handle();
+        }
 
         if (self::userRole() !== $requiredRole) {
             ResponseHelper::forbidden('No tienes permisos suficientes para realizar esta acción.');

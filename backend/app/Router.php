@@ -8,17 +8,17 @@ use Bramus\Router\Router as BramusRouter;
 use CanariApp\Backend\Controllers\Api\WikiController;
 use CanariApp\Backend\Controllers\AuthController;
 use CanariApp\Backend\Controllers\BreederController;
-use CanariApp\Backend\Controllers\CanaryController;
 use CanariApp\Backend\Controllers\CageController;
+use CanariApp\Backend\Controllers\CanaryController;
+use CanariApp\Backend\Controllers\ChickController;
 use CanariApp\Backend\Controllers\HomeController;
 use CanariApp\Backend\Controllers\MatingController;
 use CanariApp\Backend\Controllers\NestController;
 use CanariApp\Backend\Controllers\PairController;
+use CanariApp\Backend\Controllers\SimulationController;
 use CanariApp\Backend\Controllers\TitleController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
-use CanariApp\Backend\Controllers\ChickController;
-use CanariApp\Backend\Controllers\SimulationController;
 
 final class Router {
     private BramusRouter $router;
@@ -45,6 +45,12 @@ final class Router {
             AuthMiddleware::requireRole('administrador');
         });
 
+        // Solo el rol criador puede acceder a los módulos operativos de crianza (administrador recibe 403)
+        $breederRoutes = '/api/v1/(?:criador|canarios|jaulas|parejas|cruces|nidadas|crias|titulos|simulaciones)(?:/.*)?';
+        $this->router->before('GET|POST|PUT|PATCH|DELETE', $breederRoutes, function (): void {
+            AuthMiddleware::requireRole('criador');
+        });
+
         // --- RUTAS PRIVADAS ---
         $this->router->get('/api/v1/me', function (): void {
             ResponseHelper::success(
@@ -59,16 +65,12 @@ final class Router {
         $this->router->get('/api/v1/criador/perfil', BreederController::class . '@myProfile');
         $this->router->put('/api/v1/criador/perfil', BreederController::class . '@updateProfile');
 
-        // Gestión administrativa de criadores
+        // Gestión administrativa de criadores (sin DELETE: BD v7.1 no concede borrado ni baja de criadero)
         $this->router->get('/api/v1/admin/criadores', BreederController::class . '@index');
         $this->router->get('/api/v1/admin/criadores/(\d+)', BreederController::class . '@show');
-
         $this->router->post('/api/v1/admin/register', AuthController::class . '@register');
         $this->router->post('/api/v1/admin/criadores', BreederController::class . '@store');
-
         $this->router->put('/api/v1/admin/criadores/(\d+)', BreederController::class . '@update');
-
-        $this->router->delete('/api/v1/admin/criadores/(\d+)', BreederController::class . '@destroy');
 
         // Canarios: sin borrado (SRS 1.2, BD v7.1 no concede DELETE)
         $this->router->get('/api/v1/canarios', CanaryController::class . '@index');
@@ -76,7 +78,7 @@ final class Router {
         $this->router->post('/api/v1/canarios', CanaryController::class . '@store');
         $this->router->put('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
         $this->router->patch('/api/v1/canarios/(\d+)', CanaryController::class . '@update');
-        
+
         // Jaulas: solo el criador autenticado, dentro de su propio criadero.
         $this->router->get('/api/v1/jaulas', CageController::class . '@index');
         $this->router->get('/api/v1/jaulas/(\d+)', CageController::class . '@show');
@@ -100,8 +102,6 @@ final class Router {
         $this->router->get('/api/v1/nidadas/cruce/(\d+)', NestController::class . '@byMating');
         $this->router->get('/api/v1/nidadas/(\d+)', NestController::class . '@show');
         $this->router->post('/api/v1/nidadas', NestController::class . '@store');
-        
-        
 
         // Crías: asociadas a una nidada y a un canario; sin borrado físico
         $this->router->get('/api/v1/crias', ChickController::class . '@index');
@@ -125,8 +125,6 @@ final class Router {
         $this->router->get('/api/v1/simulaciones/(\d+)', SimulationController::class . '@show');
         $this->router->post('/api/v1/simulaciones', SimulationController::class . '@store');
 
-        
-
         // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
         $this->router->get('/api/v1/wiki', WikiController::class . '@index');
         $this->router->get('/api/v1/wiki/clubes', WikiController::class . '@clubes');
@@ -145,4 +143,3 @@ final class Router {
         $this->router->run();
     }
 }
-
