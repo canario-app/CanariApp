@@ -9,22 +9,22 @@ $post = $_POST;
 $pendiente = false;
 $abierta = 0;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'corregir') {
+// Backend (rama 31): PATCH /api/v1/admin/solicitudes-correccion/{id} con {estado: aprobada|rechazada, motivo}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'resolver') {
     $abierta = (int)($_POST['id'] ?? 0);
-    $sexo = $_POST['sexo'] ?? '';
-    if (!in_array($sexo, ['Macho', 'Hembra'], true)) $err['sexo'] = 'Elija el sexo.';
-    $cod = leer_variedad($_POST['variedad'] ?? '');
-    if (!$cod) $err['variedad'] = 'Elija una variedad de la lista del nomenclador.';
-    elseif ($m = error_variedad_sexo($cod, $sexo)) $err['variedad'] = $m;
+    $decision = $_POST['decision'] ?? '';
+    if (!in_array($decision, ['aprobada', 'rechazada'], true)) $err['decision'] = 'Elija aprobar o rechazar.';
+    $obs = trim($_POST['observacion'] ?? '');
+    if ($decision === 'rechazada' && $obs === '') $err['observacion'] = 'Indique el motivo del rechazo.';
     if (!$err) {
-        $r = api_admin('POST', "/api/v1/admin/correcciones/$abierta/resolver", ['sexo' => $sexo === 'Macho' ? 'M' : 'H', 'id_variedad' => id_variedad($cod)]);
+        $r = api_admin('PATCH', "/api/v1/admin/solicitudes-correccion/$abierta", ['estado' => $decision, 'motivo' => $obs ?: null]);
         if ($r['sin_endpoint']) $pendiente = true;
-        elseif ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_correcciones.php', 'Corrección guardada', 'La solicitud se cerró y quedó registrada en la auditoría.');
-        else $err['api'] = $r['message'] ?: 'La API rechazó la corrección.';
+        elseif ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_correcciones.php', 'Solicitud ' . $decision, 'La decisión quedó registrada en la auditoría.');
+        else $err['api'] = $r['message'] ?: 'La API rechazó la decisión.';
     }
 }
 
-$r = api_admin('GET', '/api/v1/admin/correcciones?estado=pendiente');
+$r = api_admin('GET', '/api/v1/admin/solicitudes-correccion?estado=pendiente');
 $lista = $r['status'] === 200 ? ($r['data'] ?? []) : [];
 $sin_api = $r['sin_endpoint'];
 
@@ -39,7 +39,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 <div>
   <p class="eyebrow">Administración</p>
   <h1 class="titulo-l">Correcciones solicitadas</h1>
-  <p class="bajada">Los criadores pueden pedirle que corrija el sexo o la variedad de uno de sus ejemplares. Usted solo puede corregir ejemplares con una solicitud pendiente.</p>
+  <p class="bajada">Los criadores pueden pedir que se corrija el sexo o la variedad de uno de sus ejemplares. Aquí usted aprueba o rechaza cada solicitud pendiente.</p>
 </div>
 
 <?php if ($sin_api) echo aviso_pendiente_backend('No se pueden listar ni resolver las solicitudes de corrección todavía.'); ?>
@@ -70,7 +70,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
         <td style="max-width:260px"><?= e($s['motivo']) ?></td>
         <td><?= e(fecha(substr($s['fecha_solicitud'], 0, 10))) ?></td>
         <td class="acciones" style="padding-right:16px">
-          <button type="button" class="btn btn-sm btn-primario" data-modal="m-corregir" data-set-id="<?= (int)$s['id_solicitud'] ?>" data-set-ejemplar="<?= e($s['anillo']) ?>"><?= icono('llave', 12) ?> Corregir</button>
+          <button type="button" class="btn btn-sm btn-primario" data-modal="m-corregir" data-set-id="<?= (int)$s['id_solicitud'] ?>" data-set-ejemplar="<?= e($s['anillo']) ?>"><?= icono('llave', 12) ?> Resolver</button>
         </td>
       </tr>
     <?php endforeach; ?>
@@ -79,26 +79,25 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 </div>
 <?php endif; ?>
 
-<?= modal_inicio('m-corregir', 'Modo de Corrección', 'Corregir el ejemplar <span data-campo="ejemplar"></span>', 'Cada corrección queda en la auditoría con el valor anterior, el nuevo, el motivo, su usuario y el criador que la solicitó.', $abierta > 0 && $err, true) ?>
+<?= modal_inicio('m-corregir', 'Solicitud de corrección', 'Resolver la solicitud del ejemplar <span data-campo="ejemplar"></span>', 'La decisión queda en la auditoría con su usuario, la fecha y el criador que la solicitó.', $abierta > 0 && $err, true) ?>
 <form method="POST" style="display:flex;flex-direction:column;gap:18px" novalidate>
-  <input type="hidden" name="accion" value="corregir">
+  <input type="hidden" name="accion" value="resolver">
   <input type="hidden" name="id" data-campo="id" value="<?= $abierta ?: '' ?>">
-  <div class="campo<?= isset($err['sexo']) ? ' error' : '' ?>">
-    <label>Sexo</label>
+  <div class="campo<?= isset($err['decision']) ? ' error' : '' ?>">
+    <label>Decisión</label>
     <div class="radios-sexo">
-      <?php foreach (['Macho', 'Hembra'] as $s): ?>
-        <label class="radio"><input type="radio" name="sexo" value="<?= $s ?>" <?= ($post['sexo'] ?? '') === $s ? 'checked' : '' ?>> <?= $s ?></label>
+      <?php foreach (['aprobada' => 'Aprobar', 'rechazada' => 'Rechazar'] as $val => $txt): ?>
+        <label class="radio"><input type="radio" name="decision" value="<?= $val ?>" <?= ($post['decision'] ?? '') === $val ? 'checked' : '' ?>> <?= $txt ?></label>
       <?php endforeach; ?>
     </div>
-    <?= $msg('sexo') ?>
+    <?= $msg('decision') ?>
   </div>
-  <div class="campo<?= isset($err['variedad']) ? ' error' : '' ?>">
-    <label for="variedad">Variedad del nomenclador</label>
-    <input class="input" id="variedad" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Ej.: CC033" value="<?= e($post['variedad'] ?? '') ?>">
-    <?= datalist_variedades() ?>
-    <?= $msg('variedad') ?: '<span class="ayuda-campo">Si la variedad indica sexo, debe coincidir con el del ejemplar.</span>' ?>
+  <div class="campo<?= isset($err['observacion']) ? ' error' : '' ?>">
+    <label for="observacion">Observación</label>
+    <textarea class="input" id="observacion" name="observacion" maxlength="1000" placeholder="Obligatoria si rechaza la solicitud."><?= e($post['observacion'] ?? '') ?></textarea>
+    <?= $msg('observacion') ?>
   </div>
-  <div class="acciones-form"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primario">Guardar corrección</button></div>
+  <div class="acciones-form"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primario">Guardar decisión</button></div>
 </form>
 <?= modal_fin() ?>
 

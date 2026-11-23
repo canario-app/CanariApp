@@ -14,6 +14,13 @@ COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
 
 # ---------- API (backend) ----------
 FROM base AS api
+# pg_dump 16 (misma versión que el servidor) para los respaldos de BackupController
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=composer_bin /usr/bin/composer /usr/local/bin/composer
 WORKDIR /var/www/app
 COPY backend/composer.json backend/composer.lock ./

@@ -202,7 +202,7 @@ El resultado muestra los porcentajes por sexo de la cría y el **Cuadro de Punne
 
 El sexo y el anillo no se editan libremente, porque afectan a parejas, crías y genealogía. Hay dos caminos, ambos desde la **ficha del ejemplar**:
 
-- **Solicitar corrección:** indique qué dato está mal y el motivo. La solicitud llega al administrador.
+- **Solicitar corrección:** indique qué dato está mal (sexo o variedad) y el motivo. La solicitud llega al administrador, que la aprueba o rechaza. Mientras esté pendiente, la ficha muestra **Cancelar solicitud** por si quiere retirarla.
 - **Modo de Corrección:** se activa confirmando su **contraseña** y escribiendo un **motivo**. Permite cambiar los datos y, si el canario tiene parejas, **decidir qué hacer con cada una**. Termine con **Guardar corrección** o salga con **Salir sin guardar**.
 
 Toda corrección queda registrada con quién la hizo, cuándo, el valor anterior, el nuevo y el motivo.
@@ -219,11 +219,11 @@ El administrador **no gestiona canarios**: administra cuentas, catálogos y el s
 | **Nomenclador de variedades** | Consultar las 2.661 variedades (código, nombre, tipo CC/CP, serie, sexo). | Consulta disponible; la carga de archivo está en desarrollo |
 | **Catálogo de mutaciones** | Consultar las mutaciones y su tipo de herencia. | Consulta disponible; la carga de archivo está en desarrollo |
 | **Siglas de club** | Ver las siglas (CON, COV, COR, SOCH) y registrar nuevas. | Consulta disponible; registrar está en desarrollo |
-| **Correcciones solicitadas** | Revisar y resolver las solicitudes de los criadores. | En desarrollo |
-| **Modo de operación** | Activar *Mantenimiento* o *Emergencia*: cierra las sesiones de criadores y bloquea su ingreso hasta volver al modo normal. | En desarrollo |
-| **Respaldos** | Ver respaldos y restaurar uno (reemplaza los datos actuales). | En desarrollo |
+| **Correcciones solicitadas** | Ver las solicitudes pendientes de los criadores y **Resolver**: aprobar o rechazar (el rechazo exige una observación). | Disponible |
+| **Modo de operación** | Activar *Mantenimiento* o *Emergencia*: los criadores no pueden ingresar ni operar hasta **Volver al modo normal**. En emergencia se debe registrar el diagnóstico y las acciones de recuperación antes de volver. | Disponible |
+| **Respaldos** | Ver los 7 respaldos más recientes y **Generar respaldo ahora**. Restaurar un respaldo (solo en mantenimiento o emergencia). | Generar y listar disponibles; restaurar está en desarrollo |
 
-Las secciones *en desarrollo* ya tienen su pantalla, pero muestran el aviso «**Función pendiente en el backend**» hasta que el equipo de backend publique la operación.
+Las funciones *en desarrollo* ya tienen su pantalla, pero muestran el aviso «**Función pendiente en el backend**» hasta que el equipo de backend publique la operación.
 
 ### Crear la cuenta de un criador
 
@@ -241,6 +241,7 @@ Las secciones *en desarrollo* ya tienen su pantalla, pero muestran el aviso «**
 | Correo o contraseña incorrectos | Los datos no coinciden | Revise mayúsculas y el correo; quedan pocos intentos |
 | Cuenta bloqueada temporalmente | 5 intentos fallidos | Espere los 15 minutos de la cuenta regresiva |
 | Su sesión se cerró | 30 minutos sin actividad | Inicie sesión de nuevo |
+| Sistema en mantenimiento | El administrador activó mantenimiento o emergencia | Espere a que vuelva el modo normal |
 | Anillo no disponible | Ese anillo ya está registrado | Revise número, club, socio y temporada |
 | Elija una variedad del nomenclador | El código no existe | Escriba el código o nombre y elija de la lista |
 | Este macho ya tiene 6 parejas activas | Límite por macho | Finalice una pareja del macho |

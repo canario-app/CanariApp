@@ -10,11 +10,12 @@ $modal_abierto = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
+    $idModo = (int)(modo_actual()['detalle']['id_modo'] ?? 0);
     if ($accion === 'activar') {
         $modo = $_POST['modo'] ?? '';
         if (!in_array($modo, ['mantenimiento', 'emergencia'], true)) { $err['modo'] = 'Elija un modo.'; }
         else {
-            $r = api_admin('POST', '/api/v1/admin/modo', ['modo' => $modo]);
+            $r = api_admin('POST', '/api/v1/admin/modo-operacion', ['modo' => $modo]);
             if ($r['sin_endpoint']) $pendiente = true;
             elseif ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_modo.php', 'Modo ' . $modo . ' activado', 'Se cerraron las sesiones de los criadores y no podrán iniciar sesión hasta volver al modo normal.');
             else $err['api'] = $r['message'] ?: 'La API rechazó el cambio de modo.';
@@ -24,14 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $d = trim($_POST['diagnostico'] ?? '');
         if ($d === '') $err['diagnostico'] = 'Escriba el diagnóstico del incidente.';
         else {
-            $r = api_admin('PATCH', '/api/v1/admin/modo', ['diagnostico' => $d, 'acciones_recuperacion' => trim($_POST['acciones'] ?? '') ?: null]);
+            $r = api_admin('PATCH', "/api/v1/admin/modo-operacion/$idModo/diagnostico", ['diagnostico' => $d, 'acciones_recuperacion' => trim($_POST['acciones'] ?? '') ?: null]);
             if ($r['sin_endpoint']) $pendiente = true;
             elseif ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_modo.php', 'Evaluación registrada', 'Quedó guardada con su fecha y hora.');
             else $err['api'] = $r['message'] ?: 'La API rechazó la evaluación.';
         }
     }
     if ($accion === 'desactivar') {
-        $r = api_admin('POST', '/api/v1/admin/modo/desactivar', []);
+        $r = api_admin('PATCH', "/api/v1/admin/modo-operacion/$idModo/desactivar", []);
         if ($r['sin_endpoint']) $pendiente = true;
         elseif ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_modo.php', 'Modo normal restablecido', 'Los criadores pueden volver a iniciar sesión.');
         else $err['api'] = $r['message'] ?: 'La API rechazó la desactivación (una emergencia exige diagnóstico y acciones de recuperación).';

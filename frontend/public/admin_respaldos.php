@@ -21,8 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'resta
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'generar') {
+    $r = api_admin('POST', '/api/v1/admin/respaldos', ['motivo' => 'Respaldo manual desde la administración']);
+    if ($r['status'] >= 200 && $r['status'] < 300) redirigir('admin_respaldos.php', 'Respaldo registrado', 'Se conservan los 7 más recientes; los más antiguos se rotan automáticamente.');
+    $err = $r['message'] ?: 'La API rechazó el respaldo.';
+}
+
+// Backend: data = {items: [...], total, max_retention}
 $r = api_admin('GET', '/api/v1/admin/respaldos');
-$lista = $r['status'] === 200 ? ($r['data'] ?? []) : [];
+$lista = $r['status'] === 200 ? ($r['data']['items'] ?? []) : [];
 $sin_api = $r['sin_endpoint'];
 
 $pagina = 'respaldos';
@@ -40,7 +47,9 @@ include __DIR__ . '/../includes/header.php';
 
 <?php if ($sin_api) echo aviso_pendiente_backend('No se puede listar ni restaurar respaldos todavía.'); ?>
 <?php if ($pendiente) echo aviso_pendiente_backend('La restauración está confirmada, pero el backend aún no tiene el endpoint.'); ?>
-<?php if ($err) echo aviso_error('No se pudo restaurar', $err); ?>
+<?php if ($err) echo aviso_error('No se pudo completar la acción', $err); ?>
+
+<form method="POST"><input type="hidden" name="accion" value="generar"><button class="btn btn-primario"><?= icono('mas', 14) ?> Generar respaldo ahora</button></form>
 
 <?php if (!$puede_restaurar): ?>
 <div class="aviso"><?= icono('info') ?><div><strong>Restauración deshabilitada en modo normal</strong><p>Para restaurar un respaldo active primero el <a class="link" href="admin_modo.php">modo de mantenimiento o de emergencia</a>.</p></div></div>

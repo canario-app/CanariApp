@@ -15,13 +15,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     switch ($_POST['accion'] ?? '') {
         case 'solicitar':
             if (trim($post['motivo'] ?? '') === '') { $err['motivo'] = 'Explique qué está mal y cuál es el dato correcto.'; $modal_abierto = 'm-solicitar'; break; }
-            $c['estado'] = 'correccion';
-            guardar_canario($c);
+            // Backend (SRS-RF033): POST /api/v1/solicitudes-correccion {id_canario, dato_a_corregir: sexo|variedad, motivo}
+            api_escribir('POST', '/api/v1/solicitudes-correccion', [
+                'id_canario' => (int)$c['id'],
+                'dato_a_corregir' => ($post['dato'] ?? '') === 'Variedad' ? 'variedad' : 'sexo',
+                'motivo' => trim($post['motivo']),
+            ]);
             redirigir($url, 'Solicitud enviada', 'El administrador revisará la corrección. La ficha mostrará «Corrección solicitada» hasta que se resuelva.');
 
         case 'cancelar_solicitud':
-            $c['estado'] = '';
-            guardar_canario($c);
+            foreach (api_lista('/api/v1/solicitudes-correccion?estado=pendiente&id_canario=' . (int)$c['id']) as $s) {
+                api_escribir('PATCH', '/api/v1/solicitudes-correccion/' . (int)$s['id_solicitud'] . '/cancelar', ['motivo' => 'Cancelada por el criador']);
+            }
+            unset($_SESSION['correcciones_pendientes'][$k]);
             redirigir($url, 'Solicitud cancelada', 'Se retiró la solicitud de corrección.');
 
         case 'modo_correccion':
@@ -179,7 +185,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
   <input type="hidden" name="accion" value="solicitar">
   <div class="campo">
     <label for="dato">¿Qué dato debe corregirse?</label>
-    <select class="input" id="dato" name="dato"><?= select_opciones(['Sexo', 'Variedad', 'Anillo', 'Padre o madre', 'Otro'], $post['dato'] ?? 'Sexo') ?></select>
+    <select class="input" id="dato" name="dato"><?= select_opciones(['Sexo', 'Variedad'], $post['dato'] ?? 'Sexo') ?></select>
   </div>
   <div class="campo<?= isset($err['motivo']) ? ' error' : '' ?>">
     <label for="motivo">Motivo</label>

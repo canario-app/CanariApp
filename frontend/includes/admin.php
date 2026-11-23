@@ -144,10 +144,11 @@ function resultado_carga_html($res) {
 
 // Estado actual del sistema: ['modo' => normal|mantenimiento|emergencia, 'detalle' => array|null, 'conocido' => bool]
 function modo_actual() {
-    $r = api_admin('GET', '/api/v1/admin/modo');
+    // Backend: GET /api/v1/admin/modo-operacion/activo -> {estado, activo, detalle{id_modo, modo, fecha_activacion, diagnostico, ...}}
+    $r = api_admin('GET', '/api/v1/admin/modo-operacion/activo');
     if ($r['status'] === 200 && is_array($r['data'])) {
         $d = $r['data'];
-        return ['modo' => $d['modo'] ?? 'normal', 'detalle' => $d, 'conocido' => true];
+        return ['modo' => $d['estado'] ?? 'normal', 'detalle' => $d['detalle'] ?? null, 'conocido' => true];
     }
     return ['modo' => 'normal', 'detalle' => null, 'conocido' => false];
 }

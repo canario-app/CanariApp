@@ -73,7 +73,13 @@ function &db() {
     $criaDe = [];
     foreach ($lr as $x) $criaDe[$x['id_canario']] = $x;
 
+    // Ejemplares con solicitud de corrección pendiente (backend); si la ruta no existe, se usa lo recordado en la sesión
     $pend = $_SESSION['correcciones_pendientes'] ?? [];
+    $rs = api('GET', '/api/v1/solicitudes-correccion?estado=pendiente');
+    if ($rs['status'] === 200) {
+        $pend = [];
+        foreach ((array)$rs['data'] as $s) if (isset($clavePorId[$s['id_canario']])) $pend[$clavePorId[$s['id_canario']]] = true;
+    }
     $canarios = [];
     foreach ($lc as $x) {
         $k = $clavePorId[$x['id_canario']];

@@ -27,9 +27,19 @@ function api($metodo, $ruta, $cuerpo = null, $conToken = true) {
     return ['status' => $status, 'data' => $j['data'] ?? null, 'message' => $j['message'] ?? '', 'errors' => $j['errors'] ?? []];
 }
 
+// 503 = mantenimiento o emergencia (SRS-RF028): se cierra la sesión del criador y se avisa en el login
+function cortar_si_mantenimiento($r) {
+    if ($r['status'] === 503) {
+        unset($_SESSION['usuario'], $_SESSION['token']);
+        header('Location: login.php?mantenimiento=1');
+        exit;
+    }
+}
+
 // GET que devuelve la lista de datos o corta la página con un aviso si falla
 function api_lista($ruta) {
     $r = api('GET', $ruta);
+    cortar_si_mantenimiento($r);
     if ($r['status'] === 401) {
         unset($_SESSION['usuario'], $_SESSION['token']);
         header('Location: login.php?expirada=1');
@@ -45,6 +55,7 @@ function api_lista($ruta) {
 // Escritura: si la API rechaza, vuelve a la página anterior mostrando el motivo exacto
 function api_escribir($metodo, $ruta, $cuerpo) {
     $r = api($metodo, $ruta, $cuerpo);
+    cortar_si_mantenimiento($r);
     if ($r['status'] === 401) {
         unset($_SESSION['usuario'], $_SESSION['token']);
         header('Location: login.php?expirada=1');

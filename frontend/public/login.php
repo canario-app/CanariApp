@@ -19,6 +19,9 @@ $correo = $_GET['correo'] ?? '';
 $aviso = null;          // [tipo, titulo, texto]
 $err_correo = $err_clave = '';
 
+if (isset($_GET['mantenimiento'])) {
+    $aviso = ['aviso-warn', 'Sistema en mantenimiento', 'El administrador suspendió temporalmente el acceso de los criadores. Intente nuevamente más tarde.'];
+}
 if (isset($_GET['expirada'])) {
     $aviso = ['', 'Su sesión se cerró', 'Por seguridad, cerramos su sesión tras ' . MINUTOS_INACTIVIDAD . ' minutos sin actividad. Inicie sesión nuevamente para continuar.'];
 }
@@ -28,6 +31,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$bloqueado) {
     $clave  = $_POST['clave'] ?? '';
     $r = iniciar_sesion_api($correo, $clave);
     $u = $r['status'] === 200 ? $r['data']['user'] : null;
+    // SRS-RF028: en mantenimiento o emergencia el criador no puede ingresar (la API de crianza responde 503)
+    if ($u && $u['rol'] === 'criador') {
+        $_SESSION['token'] = $r['data']['token'];
+        $modo = api('GET', '/api/v1/criador/perfil');
+        unset($_SESSION['token']);
+        if ($modo['status'] === 503) {
+            header('Location: login.php?mantenimiento=1');
+            exit;
+        }
+    }
 
     if ($u && in_array($u['rol'], ['criador', 'administrador'], true)) {
         session_regenerate_id(true);
