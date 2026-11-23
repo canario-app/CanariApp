@@ -92,6 +92,7 @@ final class Router {
         $this->router->get('/api/v1/admin/solicitudes-correccion', CorrectionRequestController::class . '@adminIndex');
         $this->router->get('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@adminShow');
         $this->router->patch('/api/v1/admin/solicitudes-correccion/(\d+)', CorrectionRequestController::class . '@resolve');
+        $this->router->patch('/api/v1/admin/canarios/(\d+)', CanaryController::class . '@adminCorrect');
 
         // Gestión administrativa de modos de operación (SRS-RF028, DAT-003)
         $this->router->get('/api/v1/admin/modo-operacion', OperationModeController::class . '@index');

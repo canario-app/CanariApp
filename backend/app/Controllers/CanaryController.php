@@ -29,11 +29,10 @@ class CanaryController {
         'requiere_revision',
     ];
 
-    /** Metadatos aceptados cuando se activa el Modo de Corrección en PATCH/PUT (RF031/RF033). */
+    /** Metadatos aceptados cuando se activa el Modo de Corrección en PATCH/PUT (RF030/RF031). */
     private const CORRECTION_META_FIELDS = [
         'modo_correccion',
         'motivo',
-        'id_solicitud',
         'password',
         'anular_parejas',
     ];
@@ -123,9 +122,8 @@ class CanaryController {
      *
      * Sin Modo de Corrección bloquea la modificación de `anillo` y de `sexo`
      * ya asignado. Con Modo de Corrección (`X-Correction-Mode: true` o
-     * `modo_correccion: true`) exige `id_solicitud` aprobada del mismo ejemplar,
-     * `motivo` y la contraseña actual (`password`) del criador (RF031, RF033),
-     * permitiendo corregir únicamente el dato solicitado (`sexo` o `id_variedad`).
+     * `modo_correccion: true`) exige `motivo` y la contraseña actual (`password`)
+     * del criador (SRS-RF030, SRS-RF031), sin requerir solicitud previa.
      */
     public function update(int|string $id): void {
         $this->ensureBreederRole();
@@ -177,11 +175,11 @@ class CanaryController {
             // El anillo nunca es editable mediante Modo de Corrección
             if (array_key_exists('anillo', $filtered)) {
                 ResponseHelper::validationError([
-                    'anillo' => 'El número de anillo no puede modificarse mediante Modo de Corrección; solo se corrige sexo o variedad según solicitud aprobada.',
+                    'anillo' => 'El número de anillo no puede modificarse mediante Modo de Corrección; solo se corrige sexo o variedad.',
                 ]);
             }
 
-            // Verifica contraseña actual del criador (RF031)
+            // Verifica contraseña actual del criador (RF030 / RF031)
             $userId = (int) AuthMiddleware::userId();
             $password = (string) ($input['password'] ?? '');
             $userModel = new User();
@@ -192,20 +190,12 @@ class CanaryController {
             }
 
             $reason = trim((string) ($input['motivo'] ?? ''));
-            $requestId = $this->positiveInt($input['id_solicitud'] ?? null);
-            if ($requestId === null) {
-                ResponseHelper::validationError([
-                    'id_solicitud' => 'Debe indicar el ID de una solicitud de corrección aprobada.',
-                ]);
-            }
-
             $annulPairs = filter_var($input['anular_parejas'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             $correctionResult = $model->updateWithCorrection(
                 $idCanario,
                 $filtered,
                 $targetBreederId,
-                $requestId,
                 $userId,
                 $reason,
                 $annulPairs
@@ -218,7 +208,7 @@ class CanaryController {
 
             ResponseHelper::success(
                 $correctionResult['updated'],
-                'Canario corregido y solicitud cerrada exitosamente.'
+                'Canario corregido exitosamente.'
             );
         }
 
@@ -244,6 +234,95 @@ class CanaryController {
         }
 
         ResponseHelper::success($actualizado, 'Canario actualizado exitosamente.');
+    }
+
+    /**
+     * [Admin] Corrige el sexo o la variedad de un ejemplar que posea una
+     * solicitud de corrección en estado 'pendiente' (SRS-RF033).
+     * PATCH /api/v1/admin/canarios/{id}
+     */
+    public function adminCorrect(int|string $id): void {
+        if (AuthMiddleware::userRole() !== 'administrador') {
+            ResponseHelper::forbidden('Solo un administrador puede ejecutar esta corrección.');
+        }
+
+        $adminUserId = AuthMiddleware::userId();
+        if ($adminUserId === null || !is_numeric($adminUserId)) {
+            ResponseHelper::unauthorized('No hay un usuario autenticado.');
+        }
+
+        $idCanario = $this->parseId($id);
+        $input = $this->getJsonInput();
+
+        $errors = [];
+        foreach (self::SERVER_FIELDS as $field) {
+            if (array_key_exists($field, $input)) {
+                $errors[$field] = 'Este campo lo asigna el servidor.';
+            }
+        }
+
+        foreach (['anillo', 'id_club', 'numero_socio', 'temporada', 'id_criador'] as $forbiddenField) {
+            if (array_key_exists($forbiddenField, $input)) {
+                $errors[$forbiddenField] = 'Este campo no puede modificarse mediante corrección administrativa.';
+            }
+        }
+
+        $idSolicitud = null;
+        if (array_key_exists('id_solicitud', $input) && $input['id_solicitud'] !== null && $input['id_solicitud'] !== '') {
+            $idSolicitud = $this->positiveInt($input['id_solicitud']);
+            if ($idSolicitud === null) {
+                $errors['id_solicitud'] = 'El ID de solicitud debe ser un entero positivo.';
+            }
+        }
+
+        if (array_key_exists('motivo', $input) && $input['motivo'] !== null && !is_string($input['motivo'])) {
+            $errors['motivo'] = 'El motivo debe ser una cadena de texto.';
+        } elseif (is_string($input['motivo'] ?? null) && mb_strlen(trim($input['motivo'])) > 500) {
+            $errors['motivo'] = 'El motivo no puede superar los 500 caracteres.';
+        }
+
+        if (array_key_exists('sexo', $input) && (!is_string($input['sexo']) || !in_array($input['sexo'], ['M', 'H'], true))) {
+            $errors['sexo'] = 'El sexo debe ser "M" o "H".';
+        }
+
+        if (array_key_exists('id_variedad', $input) && $this->positiveInt($input['id_variedad']) === null) {
+            $errors['id_variedad'] = 'Debe indicar un identificador de variedad válido.';
+        }
+
+        if (!array_key_exists('sexo', $input) && !array_key_exists('id_variedad', $input)) {
+            $errors['correccion'] = 'Debe indicar el nuevo valor de "sexo" o "id_variedad" según la solicitud pendiente.';
+        }
+
+        if ($errors !== []) {
+            ResponseHelper::validationError($errors);
+        }
+
+        $reason = is_string($input['motivo'] ?? null) && trim($input['motivo']) !== ''
+            ? trim($input['motivo'])
+            : 'Corrección aplicada por administrador según solicitud pendiente (RF033)';
+
+        $annulPairs = filter_var($input['anular_parejas'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $filtered = $this->filterFields($input);
+
+        $model = new Canary();
+        $result = $model->applyAdminCorrection(
+            $idCanario,
+            $filtered,
+            (int) $adminUserId,
+            $reason,
+            $idSolicitud,
+            $annulPairs
+        );
+
+        if (is_string($result)) {
+            $this->handleError($result);
+            return;
+        }
+
+        ResponseHelper::success([
+            'canario'   => $result['updated'],
+            'solicitud' => $result['request'],
+        ], 'Corrección administrativa aplicada y solicitud cerrada exitosamente.');
     }
 
     /**
@@ -334,13 +413,9 @@ class CanaryController {
                 $errors['motivo'] = 'El motivo no puede superar los 500 caracteres.';
             }
 
-            if ($this->positiveInt($input['id_solicitud'] ?? null) === null) {
-                $errors['id_solicitud'] = 'Debe indicar el ID de una solicitud de corrección aprobada.';
-            }
-
             $password = $input['password'] ?? null;
             if (!is_string($password) || $password === '') {
-                $errors['password'] = 'Debe ingresar su contraseña actual para confirmar la corrección (RF031).';
+                $errors['password'] = 'Debe ingresar su contraseña actual para confirmar la corrección (RF030).';
             }
 
             // En Modo de Corrección solo se acepta sexo o id_variedad
@@ -350,8 +425,12 @@ class CanaryController {
                     $errors[$forbiddenField] = 'Este campo no puede modificarse mediante Modo de Corrección.';
                 }
             }
+
+            if (!array_key_exists('sexo', $input) && !array_key_exists('id_variedad', $input)) {
+                $errors['correccion'] = 'Debe indicar al menos sexo o id_variedad para corregir el ejemplar.';
+            }
         } elseif (array_key_exists('password', $input)) {
-            $errors['password'] = 'La contraseña solo se envía al confirmar una corrección (RF031).';
+            $errors['password'] = 'La contraseña solo se envía al confirmar una corrección (RF030).';
         }
 
         foreach (self::WRITABLE_FIELDS as $field) {
@@ -410,20 +489,17 @@ class CanaryController {
             'correction_mode_required' => ResponseHelper::forbidden(
                 'Debe activar el Modo de Corrección para modificar el sexo del ejemplar.'
             ),
-            'request_not_found' => ResponseHelper::notFound(
-                'La solicitud de corrección indicada no existe.'
+            'pending_request_required' => ResponseHelper::conflict(
+                'El ejemplar no tiene una solicitud de corrección en estado pendiente (RF033).'
             ),
             'request_mismatch' => ResponseHelper::forbidden(
-                'La solicitud de corrección no corresponde a este canario o a tu criadero.'
+                'La solicitud de corrección indicada no corresponde a este ejemplar.'
             ),
-            'request_not_approved' => ResponseHelper::conflict(
-                'La solicitud de corrección debe estar en estado aprobada antes de aplicar el cambio.'
-            ),
-            'request_already_closed' => ResponseHelper::conflict(
-                'La solicitud de corrección ya fue aplicada y cerrada anteriormente.'
+            'request_not_pending' => ResponseHelper::conflict(
+                'La solicitud de corrección ya fue resuelta o cancelada y no está pendiente.'
             ),
             'correction_field_mismatch' => ResponseHelper::validationError([
-                'correccion' => 'Solo puede modificar exactamente el dato autorizado en la solicitud aprobada (sexo o id_variedad).',
+                'correccion' => 'Solo puede modificar el dato autorizado en Modo de Corrección (sexo o id_variedad).',
             ]),
             'active_pairs_conflict' => ResponseHelper::conflict(
                 'El ejemplar participa en parejas activas o finalizadas; envíe anular_parejas=true o reasígnelas antes de corregir el sexo.'

@@ -9,12 +9,15 @@ use CanariApp\Backend\Helpers\AuthHelper;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
+use CanariApp\Backend\Models\OperationMode;
 use CanariApp\Backend\Models\User;
 use Throwable;
 
 class AuthController {
     /**
      * Inicia sesión verificando credenciales y devolviendo un JWT.
+     * Si el sistema está en modo mantenimiento o emergencia, rechaza el login
+     * de criadores con HTTP 503 y el mensaje del modo activo (SRS-RF028).
      */
     public function login(): void {
         $decoded = json_decode(file_get_contents('php://input') ?: '', true);
@@ -57,6 +60,14 @@ class AuthController {
             }
 
             ResponseHelper::unauthorized('Credenciales incorrectas.');
+        }
+
+        // SRS-RF028: Bloquea el acceso de criadores cuando hay mantenimiento o emergencia activos
+        if (($user['rol'] ?? null) === 'criador') {
+            $activeMode = (new OperationMode())->findActive();
+            if ($activeMode !== null) {
+                $this->respondServiceUnavailableForMode($activeMode);
+            }
         }
 
         $userId = (int) $user['id_usuario'];
@@ -239,5 +250,34 @@ class AuthController {
                 'numero_socio' => $numeroSocio,
             ],
         ], 'Criador registrado exitosamente por el administrador.');
+    }
+
+    /**
+     * Corta el inicio de sesión de criadores devolviendo HTTP 503 con el detalle del modo activo.
+     *
+     * @param array<string, mixed> $activeMode
+     */
+    private function respondServiceUnavailableForMode(array $activeMode): never {
+        $modo = (string) ($activeMode['modo'] ?? 'mantenimiento');
+        $message = $modo === 'emergencia'
+            ? 'El sistema se encuentra temporalmente en modo de emergencia. Intente nuevamente más tarde.'
+            : 'El sistema se encuentra en mantenimiento programado. Intente nuevamente más tarde.';
+
+        http_response_code(503);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Retry-After: 300');
+
+        echo json_encode([
+            'status'  => 'error',
+            'success' => false,
+            'message' => $message,
+            'data'    => [
+                'modo'             => $modo,
+                'fecha_activacion' => $activeMode['fecha_activacion'] ?? null,
+                'diagnostico'      => $activeMode['diagnostico'] ?? null,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        exit;
     }
 }

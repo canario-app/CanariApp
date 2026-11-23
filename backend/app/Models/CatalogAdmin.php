@@ -161,6 +161,12 @@ class CatalogAdmin extends BaseModel {
             );
 
             $this->commit();
+        } catch (PDOException $exception) {
+            if ($this->getConnection()->inTransaction()) {
+                $this->rollBack();
+            }
+
+            return $this->mapWriteException($exception);
         } catch (RuntimeException $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();
@@ -171,12 +177,6 @@ class CatalogAdmin extends BaseModel {
             }
 
             throw $exception;
-        } catch (PDOException $exception) {
-            if ($this->getConnection()->inTransaction()) {
-                $this->rollBack();
-            }
-
-            return $this->mapWriteException($exception);
         } catch (Throwable $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();
@@ -251,6 +251,12 @@ class CatalogAdmin extends BaseModel {
             });
 
             $this->commit();
+        } catch (PDOException $exception) {
+            if ($this->getConnection()->inTransaction()) {
+                $this->rollBack();
+            }
+
+            return $this->mapWriteException($exception, 'club');
         } catch (RuntimeException $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();
@@ -261,12 +267,6 @@ class CatalogAdmin extends BaseModel {
             }
 
             throw $exception;
-        } catch (PDOException $exception) {
-            if ($this->getConnection()->inTransaction()) {
-                $this->rollBack();
-            }
-
-            return $this->mapWriteException($exception, 'club');
         } catch (Throwable $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();
@@ -349,6 +349,12 @@ class CatalogAdmin extends BaseModel {
             });
 
             $this->commit();
+        } catch (PDOException $exception) {
+            if ($this->getConnection()->inTransaction()) {
+                $this->rollBack();
+            }
+
+            return $this->mapWriteException($exception, 'mutacion');
         } catch (RuntimeException $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();
@@ -359,12 +365,6 @@ class CatalogAdmin extends BaseModel {
             }
 
             throw $exception;
-        } catch (PDOException $exception) {
-            if ($this->getConnection()->inTransaction()) {
-                $this->rollBack();
-            }
-
-            return $this->mapWriteException($exception, 'mutacion');
         } catch (Throwable $exception) {
             if ($this->getConnection()->inTransaction()) {
                 $this->rollBack();

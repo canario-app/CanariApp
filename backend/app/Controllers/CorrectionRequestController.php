@@ -9,6 +9,7 @@ use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Helpers\Sanitizer;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
+use CanariApp\Backend\Models\Canary;
 use CanariApp\Backend\Models\CorrectionRequest;
 use Throwable;
 
@@ -16,7 +17,8 @@ use Throwable;
  * Controlador para las solicitudes de corrección de sexo o variedad (SRS-RF033).
  *
  *  - Criador: lista sus solicitudes, crea nuevas y cancela solicitudes pendientes.
- *  - Administrador: lista todas las solicitudes y las resuelve ('aprobada' o 'rechazada').
+ *  - Administrador: lista todas las solicitudes, rechaza o aprueba aplicando
+ *    directamente la corrección sobre el ejemplar solicitado.
  */
 class CorrectionRequestController {
     private const SERVER_FIELDS = [
@@ -242,7 +244,9 @@ class CorrectionRequestController {
     }
 
     /**
-     * [Admin] Aprueba o rechaza una solicitud pendiente ('aprobada' o 'rechazada').
+     * [Admin] Resuelve una solicitud pendiente ('aprobada' o 'rechazada').
+     * Cuando se aprueba ('aprobada'), aplica directamente la corrección sobre el ejemplar
+     * en la misma transacción (SRS-RF033).
      */
     public function resolve(int|string $id): void {
         $this->ensureAdminRole();
@@ -264,35 +268,101 @@ class CorrectionRequestController {
         $observacion = is_string($input['motivo'] ?? null) && trim($input['motivo']) !== ''
             ? trim($input['motivo'])
             : ($nuevoEstado === 'aprobada'
-                ? 'Solicitud aprobada por administrador'
+                ? 'Solicitud aprobada y corrección aplicada por administrador (RF033)'
                 : 'Solicitud rechazada por administrador');
 
         try {
-            $result = $this->requestModel->resolveByAdmin($idSolicitud, $nuevoEstado);
-            if (is_string($result)) {
-                $this->respondDomainError($result);
+            if ($nuevoEstado === 'rechazada') {
+                $result = $this->requestModel->resolveByAdmin($idSolicitud, 'rechazada');
+                if (is_string($result)) {
+                    $this->respondDomainError($result);
+                    return;
+                }
+
+                $breederId = (int) $result['previous']['id_criador'];
+
+                AuditHelper::log(
+                    action: 'update',
+                    entity: 'solicitud_correccion',
+                    recordId: $idSolicitud,
+                    previousValue: ['estado' => $result['previous']['estado']],
+                    newValue: ['estado' => 'rechazada'],
+                    reason: $observacion,
+                    userId: $this->currentUserId(),
+                    requestingBreederId: $breederId,
+                    requestId: $idSolicitud
+                );
+
+                ResponseHelper::success(
+                    $result['updated'],
+                    'Solicitud de corrección rechazada.'
+                );
                 return;
             }
 
-            $breederId = (int) $result['previous']['id_criador'];
+            $existing = $this->requestModel->findDetailed($idSolicitud);
+            if ($existing === null) {
+                ResponseHelper::notFound('Solicitud de corrección no encontrada.');
+                return;
+            }
 
-            AuditHelper::log(
-                action: 'update',
-                entity: 'solicitud_correccion',
-                recordId: $idSolicitud,
-                previousValue: ['estado' => $result['previous']['estado']],
-                newValue: ['estado' => $nuevoEstado],
-                reason: $observacion,
-                userId: $this->currentUserId(),
-                requestingBreederId: $breederId,
-                requestId: $idSolicitud
+            if ($existing['estado'] !== 'pendiente') {
+                ResponseHelper::conflict('Solo se pueden aprobar solicitudes en estado pendiente.');
+                return;
+            }
+
+            $datoACorregir = (string) $existing['dato_a_corregir'];
+            $correctionPayload = [];
+
+            if ($datoACorregir === 'sexo') {
+                $sexo = $input['sexo'] ?? null;
+                if (!is_string($sexo) || !in_array($sexo, ['M', 'H'], true)) {
+                    ResponseHelper::validationError([
+                        'sexo' => 'Debe indicar el nuevo sexo ("M" o "H") para aprobar y aplicar esta solicitud.',
+                    ]);
+                    return;
+                }
+                $correctionPayload['sexo'] = $sexo;
+            } elseif ($datoACorregir === 'variedad') {
+                $idVariedad = Sanitizer::int($input['id_variedad'] ?? null, 1);
+                if ($idVariedad === null) {
+                    ResponseHelper::validationError([
+                        'id_variedad' => 'Debe indicar el nuevo id_variedad válido para aprobar y aplicar esta solicitud.',
+                    ]);
+                    return;
+                }
+                $correctionPayload['id_variedad'] = $idVariedad;
+            }
+
+            $adminUserId = $this->currentUserId();
+            if ($adminUserId === null) {
+                ResponseHelper::unauthorized('No hay un usuario autenticado.');
+                return;
+            }
+
+            $annulPairs = filter_var($input['anular_parejas'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            $canaryModel = new Canary();
+            $applied = $canaryModel->applyAdminCorrection(
+                (int) $existing['id_canario'],
+                $correctionPayload,
+                $adminUserId,
+                $observacion,
+                $idSolicitud,
+                $annulPairs
             );
 
+            if (is_string($applied)) {
+                $this->respondCanaryCorrectionError($applied);
+                return;
+            }
+
+            $responseData = $applied['request'];
+            $responseData['canario'] = $applied['updated'];
+
             ResponseHelper::success(
-                $result['updated'],
-                $nuevoEstado === 'aprobada'
-                    ? 'Solicitud de corrección aprobada.'
-                    : 'Solicitud de corrección rechazada.'
+                $responseData,
+                'Solicitud aprobada y corrección aplicada al ejemplar exitosamente.'
             );
         } catch (Throwable) {
             ResponseHelper::internalError('No se pudo resolver la solicitud de corrección.');
@@ -447,6 +517,33 @@ class CorrectionRequestController {
             ),
             default => ResponseHelper::validationError([
                 'solicitud' => 'Los datos de la solicitud de corrección no son válidos.',
+            ]),
+        };
+    }
+
+    private function respondCanaryCorrectionError(string $code): void {
+        match ($code) {
+            'pending_request_required' => ResponseHelper::conflict(
+                'El ejemplar no tiene una solicitud de corrección pendiente.'
+            ),
+            'request_not_pending' => ResponseHelper::conflict(
+                'La solicitud de corrección ya fue resuelta o cancelada.'
+            ),
+            'correction_field_mismatch' => ResponseHelper::validationError([
+                'correccion' => 'El campo enviado no coincide con el dato solicitado en la petición.',
+            ]),
+            'active_pairs_conflict' => ResponseHelper::conflict(
+                'El ejemplar participa en parejas activas o finalizadas; envíe anular_parejas=true o reasígnelas antes de corregir el sexo.'
+            ),
+            'pairs_with_matings_conflict' => ResponseHelper::conflict(
+                'El ejemplar tiene parejas con cruces registrados que no pueden anularse; debe reasignarlas antes de corregir el sexo.'
+            ),
+            'invalid_reference' => ResponseHelper::validationError([
+                'id_variedad' => 'La variedad indicada no existe.',
+            ]),
+            'not_found' => ResponseHelper::notFound('Canario no encontrado.'),
+            default => ResponseHelper::validationError([
+                'correccion' => 'Los datos de corrección no son válidos.',
             ]),
         };
     }

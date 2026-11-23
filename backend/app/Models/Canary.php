@@ -42,11 +42,21 @@ class Canary extends BaseModel {
     ];
 
     /**
-     * Campos admitidos en Modo de Corrección según dato_a_corregir de solicitud_correccion.
+     * Campos permitidos al criador en Modo de Corrección directo (SRS-RF030).
+     *
+     * @var array<int, string>
+     */
+    private const BREEDER_CORRECTION_FIELDS = [
+        'sexo',
+        'id_variedad',
+    ];
+
+    /**
+     * Campos admitidos al administrador al resolver una solicitud pendiente (SRS-RF033).
      *
      * @var array<string, string>
      */
-    private const CORRECTION_FIELD_MAP = [
+    private const ADMIN_CORRECTION_FIELD_MAP = [
         'sexo'     => 'sexo',
         'variedad' => 'id_variedad',
     ];
@@ -58,10 +68,9 @@ class Canary extends BaseModel {
     private const ERROR_CORRECTION_REQUIRED = 'correction_mode_required';
     private const ERROR_ACTIVE_PAIRS = 'active_pairs_conflict';
     private const ERROR_PAIRS_WITH_MATINGS = 'pairs_with_matings_conflict';
-    private const ERROR_REQUEST_NOT_FOUND = 'request_not_found';
+    private const ERROR_PENDING_REQUEST_REQUIRED = 'pending_request_required';
     private const ERROR_REQUEST_MISMATCH = 'request_mismatch';
-    private const ERROR_REQUEST_NOT_APPROVED = 'request_not_approved';
-    private const ERROR_REQUEST_ALREADY_CLOSED = 'request_already_closed';
+    private const ERROR_REQUEST_NOT_PENDING = 'request_not_pending';
     private const ERROR_CORRECTION_FIELD_MISMATCH = 'correction_field_mismatch';
 
     /**
@@ -81,12 +90,9 @@ class Canary extends BaseModel {
      * Reconstruye el árbol de ascendencia (pedigrí) de un ejemplar hasta N generaciones
      * recorriendo cria -> nidada -> cruce -> pareja (id_macho e id_hembra).
      *
-     * Si el ejemplar o alguno de sus ancestros no tiene registro en cria
-     * (ejemplar fundador/externo), sus nodos padre y madre se devuelven en null.
-     *
      * @return array<string, mixed>|null
      */
-    public function findAncestry(int $idCanario, int$maxGenerations = self::DEFAULT_PEDIGREE_GENERATIONS): ?array {
+    public function findAncestry(int $idCanario, int $maxGenerations = self::DEFAULT_PEDIGREE_GENERATIONS): ?array {
         $depth = max(1, min($maxGenerations, self::MAX_PEDIGREE_GENERATIONS));
 
         $sql = '
@@ -209,7 +215,6 @@ class Canary extends BaseModel {
             : '';
 
         if ($search !== '') {
-            // PDO con prepares nativos no admite repetir el mismo parámetro.
             $conditions[] = '(c.anillo ILIKE :buscar_anillo OR c.numero_socio ILIKE :buscar_socio)';
             $params['buscar_anillo'] = '%' . $search . '%';
             $params['buscar_socio'] = '%' . $search . '%';
@@ -421,14 +426,13 @@ class Canary extends BaseModel {
     }
 
     /**
-     * Actualiza un canario con Modo de Corrección activo (SRS-RF031, SRS-RF033).
+     * Actualiza un canario del propio criador con Modo de Corrección activo (SRS-RF030, SRS-RF031).
      *
      * Reglas:
-     *  - Exige id_solicitud correspondiente a una solicitud en estado 'aprobada'
-     *    del mismo canario y criador que aún no haya sido aplicada.
-     *  - Solo permite modificar el único campo pedido en solicitud_correccion.dato_a_corregir
-     *    ('sexo' -> sexo, 'variedad' -> id_variedad). Rechaza cambios de anillo u otros campos.
-     *  - Cierra la solicitud de corrección y registra la auditoría en la misma transacción.
+     *  - El criador corrige directamente sin requerir id_solicitud (contraseña + motivo verificados en controlador).
+     *  - No se admite modificar el anillo; solo admite sexo y/o id_variedad.
+     *  - Si cambia el sexo y existen parejas no anuladas, exige $annulPairs = true
+     *    para anularlas en la misma transacción (si alguna tiene cruces, PostgreSQL lo impide).
      *
      * @param array<string, mixed> $data
      * @return array{previous: array<string, mixed>, updated: array<string, mixed>, tracked_new: array<string, mixed>}|string
@@ -437,7 +441,6 @@ class Canary extends BaseModel {
         int $id,
         array $data,
         int $idCriador,
-        int $idSolicitud,
         int $userId,
         string $reason,
         bool $annulPairs = false
@@ -448,6 +451,14 @@ class Canary extends BaseModel {
             return $validation;
         }
         $payload = $this->normalizePayload($payload);
+
+        // En Modo de Corrección no se admite anillo ni campos fuera de sexo / id_variedad
+        if (
+            $payload === []
+            || array_diff(array_keys($payload), self::BREEDER_CORRECTION_FIELDS) !== []
+        ) {
+            return self::ERROR_CORRECTION_FIELD_MISMATCH;
+        }
 
         try {
             $this->beginTransaction();
@@ -464,42 +475,162 @@ class Canary extends BaseModel {
                 return self::ERROR_NOT_FOUND;
             }
 
-            $request = $this->fetch(
-                'SELECT * FROM solicitud_correccion WHERE id_solicitud = :id_solicitud FOR UPDATE',
-                ['id_solicitud' => $idSolicitud]
+            $sexChanged = array_key_exists('sexo', $payload)
+                && $current['sexo'] !== null
+                && $payload['sexo'] !== $current['sexo'];
+
+            if ($sexChanged) {
+                $nonAnnulledPairs = $this->fetchAll(
+                    "SELECT id_pareja, estado
+                       FROM pareja
+                      WHERE (id_macho = :id_macho OR id_hembra = :id_hembra)
+                        AND estado <> 'anulada'",
+                    ['id_macho' => $id, 'id_hembra' => $id]
+                );
+
+                if ($nonAnnulledPairs !== []) {
+                    if (!$annulPairs) {
+                        $this->rollBack();
+
+                        return self::ERROR_ACTIVE_PAIRS;
+                    }
+
+                    $this->execute(
+                        "UPDATE pareja
+                            SET estado = 'anulada',
+                                fecha_fin = CURRENT_DATE
+                          WHERE (id_macho = :id_macho OR id_hembra = :id_hembra)
+                            AND estado <> 'anulada'",
+                        ['id_macho' => $id, 'id_hembra' => $id]
+                    );
+                }
+            }
+
+            AuditHelper::withoutAutoAudit(
+                fn (): int => $this->updateBy(
+                    ['id_canario' => $id, 'id_criador' => $idCriador],
+                    $payload
+                )
             );
 
-            if ($request === null) {
-                $this->rollBack();
-
-                return self::ERROR_REQUEST_NOT_FOUND;
-            }
-
-            if ((int) $request['id_criador'] !== $idCriador || (int) $request['id_canario'] !== $id) {
-                $this->rollBack();
-
-                return self::ERROR_REQUEST_MISMATCH;
-            }
-
-            if ($request['estado'] !== 'aprobada') {
-                $this->rollBack();
-
-                return self::ERROR_REQUEST_NOT_APPROVED;
-            }
-
-            $alreadyApplied = $this->fetch(
-                "SELECT 1 FROM auditoria WHERE id_solicitud = :id_solicitud AND accion = 'correccion' LIMIT 1",
-                ['id_solicitud' => $idSolicitud]
+            AuditHelper::log(
+                action: 'correccion',
+                entity: 'canario',
+                recordId: $id,
+                previousValue: array_intersect_key($current, $payload),
+                newValue: $payload,
+                reason: $reason,
+                userId: $userId,
+                db: $this->getConnection()
             );
 
-            if ($alreadyApplied !== null) {
+            $this->commit();
+        } catch (PDOException $exception) {
+            $this->rollBack();
+
+            return $this->mapWriteException($exception);
+        } catch (Throwable $exception) {
+            $this->rollBack();
+            throw $exception;
+        }
+
+        $updated = $this->findDetailed($id) ?? $current;
+
+        return [
+            'previous'    => $current,
+            'updated'     => $updated,
+            'tracked_new' => $payload,
+        ];
+    }
+
+    /**
+     * Aplica una corrección ejecutada por el administrador sobre un ejemplar que
+     * posee una solicitud de corrección en estado 'pendiente' (SRS-RF033).
+     *
+     * @param array<string, mixed> $data
+     * @return array{
+     *     previous: array<string, mixed>,
+     *     updated: array<string, mixed>,
+     *     request: array<string, mixed>,
+     *     tracked_new: array<string, mixed>
+     * }|string
+     */
+    public function applyAdminCorrection(
+        int $idCanario,
+        array $data,
+        int $adminUserId,
+        string $reason,
+        ?int $idSolicitud = null,
+        bool $annulPairs = false
+    ): array|string {
+        $payload = $this->filterAssignable($data);
+        $validation = $this->validate($payload, false);
+        if ($validation !== null) {
+            return $validation;
+        }
+        $payload = $this->normalizePayload($payload);
+
+        try {
+            $this->beginTransaction();
+
+            $current = $this->fetch(
+                'SELECT * FROM ' . $this->quoteIdentifier($this->table)
+                . ' WHERE id_canario = :id_canario FOR UPDATE',
+                ['id_canario' => $idCanario]
+            );
+
+            if ($current === null) {
                 $this->rollBack();
 
-                return self::ERROR_REQUEST_ALREADY_CLOSED;
+                return self::ERROR_NOT_FOUND;
             }
 
+            if ($idSolicitud !== null) {
+                $request = $this->fetch(
+                    'SELECT * FROM solicitud_correccion WHERE id_solicitud = :id_solicitud FOR UPDATE',
+                    ['id_solicitud' => $idSolicitud]
+                );
+
+                if ($request === null) {
+                    $this->rollBack();
+
+                    return self::ERROR_PENDING_REQUEST_REQUIRED;
+                }
+
+                if ((int) $request['id_canario'] !== $idCanario) {
+                    $this->rollBack();
+
+                    return self::ERROR_REQUEST_MISMATCH;
+                }
+
+                if ($request['estado'] !== 'pendiente') {
+                    $this->rollBack();
+
+                    return self::ERROR_REQUEST_NOT_PENDING;
+                }
+            } else {
+                $request = $this->fetch(
+                    "SELECT *
+                       FROM solicitud_correccion
+                      WHERE id_canario = :id_canario
+                        AND estado = 'pendiente'
+                      ORDER BY fecha_solicitud DESC, id_solicitud DESC
+                      LIMIT 1
+                      FOR UPDATE",
+                    ['id_canario' => $idCanario]
+                );
+
+                if ($request === null) {
+                    $this->rollBack();
+
+                    return self::ERROR_PENDING_REQUEST_REQUIRED;
+                }
+            }
+
+            $resolvedRequestId = (int) $request['id_solicitud'];
+            $requestingBreederId = (int) $request['id_criador'];
             $requestedDato = (string) $request['dato_a_corregir'];
-            $allowedColumn = self::CORRECTION_FIELD_MAP[$requestedDato] ?? null;
+            $allowedColumn = self::ADMIN_CORRECTION_FIELD_MAP[$requestedDato] ?? null;
 
             if ($allowedColumn === null) {
                 $this->rollBack();
@@ -507,7 +638,6 @@ class Canary extends BaseModel {
                 return self::ERROR_INVALID_DATA;
             }
 
-            // En Modo de Corrección no se admite anillo ni ningún campo distinto al aprobado
             if (
                 $payload === []
                 || !array_key_exists($allowedColumn, $payload)
@@ -528,7 +658,7 @@ class Canary extends BaseModel {
                        FROM pareja
                       WHERE (id_macho = :id_macho OR id_hembra = :id_hembra)
                         AND estado <> 'anulada'",
-                    ['id_macho' => $id, 'id_hembra' => $id]
+                    ['id_macho' => $idCanario, 'id_hembra' => $idCanario]
                 );
 
                 if ($nonAnnulledPairs !== []) {
@@ -538,44 +668,55 @@ class Canary extends BaseModel {
                         return self::ERROR_ACTIVE_PAIRS;
                     }
 
-                    // Anula en la misma transacción las parejas sin cruces (SRS-RF031).
-                    // Si alguna tiene cruces, fn_estado_pareja lanzará excepción y se mapea.
                     $this->execute(
                         "UPDATE pareja
                             SET estado = 'anulada',
                                 fecha_fin = CURRENT_DATE
                           WHERE (id_macho = :id_macho OR id_hembra = :id_hembra)
                             AND estado <> 'anulada'",
-                        ['id_macho' => $id, 'id_hembra' => $id]
+                        ['id_macho' => $idCanario, 'id_hembra' => $idCanario]
                     );
                 }
             }
 
             AuditHelper::withoutAutoAudit(
                 fn (): int => $this->updateBy(
-                    ['id_canario' => $id, 'id_criador' => $idCriador],
+                    ['id_canario' => $idCanario],
                     $payload
                 )
             );
 
-            // Cierra la solicitud de corrección fijando la marca de cierre definitiva (SRS-RF033)
             $this->execute(
-                'UPDATE solicitud_correccion
-                    SET fecha_cierre = CURRENT_TIMESTAMP
-                  WHERE id_solicitud = :id_solicitud',
-                ['id_solicitud' => $idSolicitud]
+                "UPDATE solicitud_correccion
+                    SET estado = 'aprobada',
+                        fecha_cierre = CURRENT_TIMESTAMP
+                  WHERE id_solicitud = :id_solicitud",
+                ['id_solicitud' => $resolvedRequestId]
             );
 
             AuditHelper::log(
                 action: 'correccion',
                 entity: 'canario',
-                recordId: $id,
+                recordId: $idCanario,
                 previousValue: array_intersect_key($current, $payload),
                 newValue: $payload,
                 reason: $reason,
-                userId: $userId,
-                requestingBreederId: $idCriador,
-                requestId: $idSolicitud,
+                userId: $adminUserId,
+                requestingBreederId: $requestingBreederId,
+                requestId: $resolvedRequestId,
+                db: $this->getConnection()
+            );
+
+            AuditHelper::log(
+                action: 'update',
+                entity: 'solicitud_correccion',
+                recordId: $resolvedRequestId,
+                previousValue: ['estado' => 'pendiente'],
+                newValue: ['estado' => 'aprobada'],
+                reason: $reason,
+                userId: $adminUserId,
+                requestingBreederId: $requestingBreederId,
+                requestId: $resolvedRequestId,
                 db: $this->getConnection()
             );
 
@@ -589,11 +730,13 @@ class Canary extends BaseModel {
             throw $exception;
         }
 
-        $updated = $this->findDetailed($id) ?? $current;
+        $updatedCanary = $this->findDetailed($idCanario) ?? $current;
+        $updatedRequest = (new CorrectionRequest())->findDetailed($resolvedRequestId) ?? $request;
 
         return [
             'previous'    => $current,
-            'updated'     => $updated,
+            'updated'     => $updatedCanary,
+            'request'     => $updatedRequest,
             'tracked_new' => $payload,
         ];
     }
