@@ -461,6 +461,18 @@ Un cruce es el apareamiento fechado de una pareja. Según SRS-RF016 una pareja p
 | `id_cruce` | entero | No | No escribible: lo genera la BD |
 | `id_criador` | entero | No | No escribible: se toma de la pareja |
 
+### Cría
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `id_nidada` | entero | Sí (al crear) | Entero positivo; nidada perteneciente al criadero autenticado; inmutable tras el registro |
+| `id_canario` | entero | Sí (al crear) | Entero positivo; ejemplar del mismo criadero distinto de los progenitores; inmutable tras el registro |
+| `factor_genetico` | entero o `null` | No | Entero positivo existente en `mutacion` o `null` |
+| `es_portadora` | booleano | No | No escribible: lo calcula la BD (`factor_genetico IS NOT NULL`) |
+| `reservada` | booleano | No | Booleano (`false` por defecto) |
+| `id_cria` | entero | No | No escribible: lo genera la BD |
+| `id_criador` | entero | No | No escribible: se toma de la pareja asociada a la nidada |
+
 ## Catálogos (wiki)
 
 Endpoints de **solo lectura** que exponen los catálogos oficiales necesarios para registrar ejemplares y usar el simulador. No son una wiki de cuidados o alimentación: ese contenido queda fuera de alcance según la sección 1.2 del SRS. Requieren Bearer como el resto de `/api/v1`.
@@ -640,14 +652,99 @@ La tabla `nidada` de la BD v7.1 contiene `id_nidada` (generado por la BD), `id_c
 
 ### Alcance de esta versión
 
-No se implementan `PUT`, `PATCH` ni `DELETE` para nidadas. El SRS define su registro y consulta; además, la BD v7.1 hace inmutable `id_cruce` en una nidada mediante `trg_nidada_cruce_inmutable` (SQL-01). El registro de las crías asociadas a la nidada corresponde a un flujo posterior y no forma parte de estos endpoints (SRS-RF019 y TSK-025 a TSK-028).
+No se implementan `PUT`, `PATCH` ni `DELETE` para nidadas. El SRS define su registro y consulta; además, la BD v7.1 hace inmutable `id_cruce` en una nidada mediante `trg_nidada_cruce_inmutable` (SQL-01).
+
+## Gestión de crías
+
+La gestión de crías está disponible para el usuario autenticado con rol `criador` y queda limitada a su propio criadero (SEG-001, DAT-004). Cada cría vincula una `nidada` (a través de `nidada -> cruce -> pareja`) con un ejemplar en `canario` y, opcionalmente, una mutación (`factor_genetico`).
+
+`id_cria`, `id_criador` y `es_portadora` **no** se aceptan en el cuerpo (`es_portadora` lo calcula la BD a partir de `factor_genetico`). `id_nidada` e `id_canario` son inmutables tras el registro.
+
+### Objeto `cria`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_cria` | entero | `cria.id_cria`, generado por la BD |
+| `id_nidada` | entero | `cria.id_nidada`, nidada a la que pertenece |
+| `id_canario` | entero | `cria.id_canario`, ejemplar asociado |
+| `factor_genetico` | entero o `null` | `cria.factor_genetico` (`id_mutacion` o `null`) |
+| `es_portadora` | booleano | `cria.es_portadora` (calculado/generado por la BD) |
+| `reservada` | booleano | `cria.reservada` |
+| `id_criador` | entero | `pareja.id_criador`, dato relacionado de consulta |
+| `id_cruce` | entero | `nidada.id_cruce`, dato relacionado de consulta |
+| `fecha_nacimiento` | fecha (`YYYY-MM-DD`) | `nidada.fecha_nacimiento`, dato relacionado de consulta |
+| `anillo` | texto | `canario.anillo`, dato relacionado de consulta |
+| `temporada` | entero | `canario.temporada`, dato relacionado de consulta |
+| `sexo` | `"M"`, `"H"` o `null` | `canario.sexo`, dato relacionado de consulta |
+| `id_variedad` | entero o `null` | `canario.id_variedad`, dato relacionado de consulta |
+| `mutacion_nombre` | texto o `null` | `mutacion.nombre`, dato relacionado de consulta |
+
+### 1. Listar crías
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/crias` |
+| Quién puede usarla | Criador autenticado; solo devuelve crías de su criadero |
+| Filtros opcionales | `id_nidada`, `id_canario`, `factor_genetico`, `reservada` |
+| Ejemplo | `GET /api/v1/crias?id_nidada=8` |
+| Respuesta | `200` con `data` = lista de objetos `cria` |
+| Errores esperados | `401`, `403`, `404` perfil de criador inexistente, `500` |
+
+### 2. Listar crías de una nidada
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/crias/nidada/{id}` |
+| Quién puede usarla | Criador autenticado; la nidada debe pertenecer a su criadero |
+| Campos | `{id}` es el identificador positivo de la nidada |
+| Ejemplo | `GET /api/v1/crias/nidada/8` |
+| Respuesta | `200` con `data` = lista de objetos `cria` asociados a esa nidada |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404` perfil de criador inexistente, `500` |
+
+### 3. Ver detalle de una cría
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/crias/{id}` |
+| Quién puede usarla | Criador autenticado; solo puede consultar crías de su criadero |
+| Campos | `{id}` es el identificador positivo de la cría |
+| Ejemplo | `GET /api/v1/crias/4` |
+| Respuesta | `200` con `data` = objeto `cria` |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404`, `500` |
+
+### 4. Registrar una cría
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/crias` |
+| Quién puede usarla | Criador autenticado |
+| Campos obligatorios | `id_nidada` (entero positivo), `id_canario` (entero positivo) |
+| Campos opcionales | `factor_genetico` (entero positivo o `null`), `reservada` (booleano, por defecto `false`) |
+| Campos no aceptados | `id_cria`, `id_criador`, `es_portadora` |
+| Ejemplo de petición | `{"id_nidada": 8, "id_canario": 25, "factor_genetico": 1, "reservada": true}` |
+| Respuesta | `201` con `data` = objeto `cria` creado |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `404` nidada inexistente o ajena, `409` canario ya registrado como cría o restricción de BD, `422` validación o referencia inválida, `500` |
+| Reglas de validación | Tanto la nidada como el canario deben pertenecer al criadero autenticado, y `id_canario` no puede corresponder a ninguno de los progenitores de la pareja |
+
+### 5. Actualizar una cría
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `PUT` o `PATCH /api/v1/crias/{id}` |
+| Quién puede usarla | Criador autenticado; solo sobre crías de su criadero |
+| Campos opcionales | `factor_genetico` (entero positivo o `null`), `reservada` (booleano) |
+| Campos no permitidos | `id_cria`, `id_criador`, `es_portadora`, `id_nidada`, `id_canario` |
+| Ejemplo de petición | `PATCH /api/v1/crias/4` con `{"reservada": true, "factor_genetico": null}` |
+| Respuesta | `200` con `data` = objeto `cria` actualizado |
+| Errores esperados | `400` ID o JSON inválido, `401`, `403`, `404`, `409` restricción de BD, `422` validación o referencia inválida, `500` |
+
+### Alcance de esta versión
+
+No se implementa `DELETE` para crías. El SRS 1.2 excluye la eliminación física general de registros, y la BD v7.1 hace inmutables `id_nidada` e `id_canario` en `cria`.
 
 ## Pendiente de coordinar
 
-- Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
-- Avisar a Frontend que se incorporaron los endpoints de `pareja` (`/api/v1/parejas`) y de `cruce` (`/api/v1/cruces`); el objeto `cruce` incluye los anillos de ambos progenitores.
-
 - Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
-- Avisar a Frontend que el objeto `canario` cambió respecto al borrador anterior.
+- Avisar a Frontend que se incorporaron los endpoints de `cría` (`/api/v1/crias`) además de `pareja`, `cruce` y `nidada`.
 
 Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
