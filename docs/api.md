@@ -574,6 +574,74 @@ La gestión de jaulas está disponible para el usuario autenticado con rol `cria
 
 No se implementan `PUT`, `PATCH` ni `DELETE` para jaulas. La versión 1.2 del SRS excluye la edición y eliminación general de registros; además, la base de datos hace inmutable `id_criador` en `jaula`. La ocupación se libera mediante el ciclo de vida de la pareja, no eliminando la jaula: una pareja se crea activa y al finalizarse libera su jaula (SRS-RF017).
 
+## Gestión de nidadas
+
+La gestión de nidadas está disponible para el usuario autenticado con rol `criador`. Cada nidada pertenece a un cruce, y el criadero propietario se determina mediante la relación `nidada -> cruce -> pareja`; el cliente no envía `id_criador` (SEG-001, DAT-001).
+
+La tabla `nidada` de la BD v7.1 contiene `id_nidada` (generado por la BD), `id_cruce` y `fecha_nacimiento`. La fecha debe ser obligatoria, no puede ser anterior a `cruce.fecha_cruce` ni posterior a la fecha actual (SRS-RF018). La base de datos refuerza estas reglas mediante `NOT NULL`, `CHECK` y el trigger `trg_validar_nidada`.
+
+### Objeto `nidada`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_nidada` | entero | `nidada.id_nidada`, generado por la BD |
+| `id_cruce` | entero | `nidada.id_cruce`, cruce al que pertenece |
+| `fecha_nacimiento` | fecha (`YYYY-MM-DD`) | `nidada.fecha_nacimiento` |
+| `fecha_cruce` | fecha (`YYYY-MM-DD`) | `cruce.fecha_cruce`, dato relacionado de consulta |
+| `id_pareja` | entero | `pareja.id_pareja`, dato relacionado de consulta |
+| `anillo_macho` | texto | Anillo del macho de la pareja del cruce |
+| `anillo_hembra` | texto | Anillo de la hembra de la pareja del cruce |
+
+### 1. Listar nidadas
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/nidadas` |
+| Quién puede usarla | Criador autenticado; solo devuelve nidadas de su criadero |
+| Filtros opcionales | `id_cruce`, `fecha_nacimiento` |
+| Ejemplo | `GET /api/v1/nidadas?id_cruce=12` |
+| Respuesta | `200` con `data` = lista de objetos `nidada`, ordenados por fecha de nacimiento descendente |
+| Errores esperados | `401`, `403`, `500` |
+
+### 2. Listar nidadas de un cruce
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/nidadas/cruce/{id}` |
+| Quién puede usarla | Criador autenticado; el cruce debe pertenecer a su criadero |
+| Campos | `{id}` es el identificador positivo del cruce |
+| Ejemplo | `GET /api/v1/nidadas/cruce/12` |
+| Respuesta | `200` con `data` = lista de nidadas asociadas a ese cruce |
+| Errores esperados | `400` ID inválido, `401`, `403`, `500` |
+
+### 3. Ver detalle de una nidada
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/nidadas/{id}` |
+| Quién puede usarla | Criador autenticado; solo puede consultar nidadas de su criadero |
+| Campos | `{id}` es el identificador positivo de la nidada |
+| Ejemplo | `GET /api/v1/nidadas/8` |
+| Respuesta | `200` con `data` = objeto `nidada` con datos de su cruce y anillos de los progenitores |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404`, `500` |
+
+### 4. Registrar una nidada
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/nidadas` |
+| Quién puede usarla | Criador autenticado |
+| Campos obligatorios | `id_cruce` (entero positivo), `fecha_nacimiento` (fecha `YYYY-MM-DD`) |
+| Campos no aceptados | `id_nidada` e `id_criador` (los asigna o determina el servidor) |
+| Ejemplo de petición | `{"id_cruce": 12, "fecha_nacimiento": "2026-11-20"}` |
+| Respuesta | `201` con `data` = objeto `nidada` creado |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `404` cruce inexistente o ajeno, `422` fecha faltante, inválida, anterior al cruce o futura, `500` |
+| Reglas de validación | El cruce debe existir y pertenecer al criadero autenticado. `fecha_nacimiento` debe ser igual o posterior a `fecha_cruce` y no posterior a la fecha actual (SRS-RF018). |
+
+### Alcance de esta versión
+
+No se implementan `PUT`, `PATCH` ni `DELETE` para nidadas. El SRS define su registro y consulta; además, la BD v7.1 hace inmutable `id_cruce` en una nidada mediante `trg_nidada_cruce_inmutable` (SQL-01). El registro de las crías asociadas a la nidada corresponde a un flujo posterior y no forma parte de estos endpoints (SRS-RF019 y TSK-025 a TSK-028).
+
 ## Pendiente de coordinar
 
 - Alta de crías sin sexo ni variedad: se registran por un flujo distinto al de este CRUD.
