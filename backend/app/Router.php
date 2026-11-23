@@ -18,6 +18,7 @@ use CanariApp\Backend\Controllers\TitleController;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Controllers\ChickController;
+use CanariApp\Backend\Controllers\SimulationController;
 
 final class Router {
     private BramusRouter $router;
@@ -119,6 +120,13 @@ final class Router {
         $this->router->put('/api/v1/titulos/(\d+)', TitleController::class . '@update');
         $this->router->patch('/api/v1/titulos/(\d+)', TitleController::class . '@update');
 
+        // Simulación genética: consulta e historial por criadero; sin edición ni borrado físico
+        $this->router->get('/api/v1/simulaciones', SimulationController::class . '@index');
+        $this->router->get('/api/v1/simulaciones/(\d+)', SimulationController::class . '@show');
+        $this->router->post('/api/v1/simulaciones', SimulationController::class . '@store');
+
+        
+
         // Catálogos oficiales (wiki): solo lectura, SRS-RF002/007/008/009/011/025/027
         $this->router->get('/api/v1/wiki', WikiController::class . '@index');
         $this->router->get('/api/v1/wiki/clubes', WikiController::class . '@clubes');
@@ -137,3 +145,4 @@ final class Router {
         $this->router->run();
     }
 }
+

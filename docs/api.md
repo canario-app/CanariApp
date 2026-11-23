@@ -473,6 +473,20 @@ Un cruce es el apareamiento fechado de una pareja. Según SRS-RF016 una pareja p
 | `id_cria` | entero | No | No escribible: lo genera la BD |
 | `id_criador` | entero | No | No escribible: se toma de la pareja asociada a la nidada |
 
+### Simulación
+
+| Campo | Tipo | Obligatorio | Regla |
+|---|---|---|---|
+| `id_macho` | entero | Sí (al crear) | Entero positivo; ejemplar con `sexo = 'M'` del mismo criadero; distinto de `id_hembra` |
+| `id_hembra` | entero | Sí (al crear) | Entero positivo; ejemplar con `sexo = 'H'` del mismo criadero; distinto de `id_macho` |
+| `id_mutacion` | entero | Sí (al crear) | Entero positivo; debe existir en `mutacion` |
+| `genotipo_macho` | texto | Sí (al crear) | `"visual"`, `"portador"` o `"sin factor"` |
+| `genotipo_hembra` | texto | Sí (al crear) | `"visual"`, `"portador"` o `"sin factor"`; si la mutación es `"ligada al sexo recesiva"`, no puede ser `"portador"` (`trg_validar_simulacion`) |
+| `id_simulacion` | entero | No | No escribible: lo genera la BD |
+| `id_criador` | entero | No | No escribible: se toma del criador autenticado |
+| `fecha` | fecha y hora | No | No escribible: lo asigna la BD (`CURRENT_TIMESTAMP`) |
+| `resultados` | arreglo | No | No escribible: lo calcula y guarda el servidor en `simulacion_resultado` |
+
 ## Catálogos (wiki)
 
 Endpoints de **solo lectura** que exponen los catálogos oficiales necesarios para registrar ejemplares y usar el simulador. No son una wiki de cuidados o alimentación: ese contenido queda fuera de alcance según la sección 1.2 del SRS. Requieren Bearer como el resto de `/api/v1`.
@@ -742,6 +756,68 @@ La gestión de crías está disponible para el usuario autenticado con rol `cria
 
 No se implementa `DELETE` para crías. El SRS 1.2 excluye la eliminación física general de registros, y la BD v7.1 hace inmutables `id_nidada` e `id_canario` en `cria`.
 
+## Simulación genética
+
+La simulación genética está disponible para el usuario autenticado con rol `criador` y queda aislada por `id_criador` (SEG-001, SRS-RF025, DAT-006). Registra la simulación en `simulacion` y almacena las probabilidades calculadas en `simulacion_resultado`.
+
+`id_simulacion`, `id_criador`, `fecha` y `resultados` **no** se aceptan en el cuerpo.
+
+### Objeto `simulacion`
+
+| Campo | Tipo | Origen |
+|---|---|---|
+| `id_simulacion` | entero | `simulacion.id_simulacion`, generado por la BD |
+| `id_criador` | entero | `simulacion.id_criador`, criador autenticado |
+| `id_macho` | entero | `simulacion.id_macho` (`canario` con `sexo = 'M'` del criadero) |
+| `anillo_macho` | texto | `canario.anillo` (macho) |
+| `id_hembra` | entero | `simulacion.id_hembra` (`canario` con `sexo = 'H'` del criadero) |
+| `anillo_hembra` | texto | `canario.anillo` (hembra) |
+| `id_mutacion` | entero | `simulacion.id_mutacion` (`mutacion.id_mutacion`) |
+| `mutacion_nombre` | texto | `mutacion.nombre` |
+| `tipo_herencia` | texto | `mutacion.tipo_herencia` (`"autosómica recesiva"` o `"ligada al sexo recesiva"`) |
+| `genotipo_macho` | texto | `simulacion.genotipo_macho` (`"visual"`, `"portador"` o `"sin factor"`) |
+| `genotipo_hembra` | texto | `simulacion.genotipo_hembra` (`"visual"`, `"portador"` o `"sin factor"`) |
+| `fecha` | fecha y hora | `simulacion.fecha` |
+| `resultados` | arreglo de objetos | Filas asociadas en `simulacion_resultado` (`sexo_cria`, `genotipo_resultado`, `probabilidad`) |
+
+### 1. Listar simulaciones
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/simulaciones` |
+| Quién puede usarla | Criador autenticado; solo devuelve simulaciones de su criadero |
+| Filtros opcionales | `id_mutacion`, `id_macho`, `id_hembra` |
+| Ejemplo | `GET /api/v1/simulaciones?id_mutacion=1` |
+| Respuesta | `200` con `data` = lista de objetos `simulacion`, ordenados por `fecha` y `id_simulacion` descendente |
+| Errores esperados | `401`, `403`, `404` perfil de criador inexistente, `500` |
+
+### 2. Ver detalle de una simulación
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `GET /api/v1/simulaciones/{id}` |
+| Quién puede usarla | Criador autenticado; solo puede consultar simulaciones de su criadero |
+| Campos | `{id}` es el identificador positivo de la simulación |
+| Ejemplo | `GET /api/v1/simulaciones/6` |
+| Respuesta | `200` con `data` = objeto `simulacion` con su arreglo `resultados` |
+| Errores esperados | `400` ID inválido, `401`, `403`, `404`, `500` |
+
+### 3. Ejecutar y registrar simulación
+
+| Campo o decisión | Valor acordado |
+|---|---|
+| Método y ruta | `POST /api/v1/simulaciones` |
+| Quién puede usarla | Criador autenticado |
+| Campos obligatorios | `id_macho`, `id_hembra`, `id_mutacion` (enteros positivos), `genotipo_macho`, `genotipo_hembra` (`"visual"`, `"portador"` o `"sin factor"`) |
+| Ejemplo de petición | `{"id_macho": 10, "id_hembra": 14, "id_mutacion": 1, "genotipo_macho": "portador", "genotipo_hembra": "sin factor"}` |
+| Respuesta | `201` con `data` = objeto `simulacion` creado junto con sus filas en `simulacion_resultado` |
+| Errores esperados | `400` JSON inválido, `401`, `403`, `404` perfil de criador inexistente, `409` restricción de BD, `422` validación, sexo incorrecto, hembra portadora en mutación ligada al sexo o referencia ajena/inexistente, `500` |
+| Reglas de validación | `id_macho` (`M`) y `id_hembra` (`H`) deben ser distintos y pertenecer al criadero; en herencia `"ligada al sexo recesiva"`, `genotipo_hembra` no puede ser `"portador"` (`trg_validar_simulacion`) y `sexo_cria` se informa como `"M"` o `"H"` sin `"portador"` en `"H"` (`ck_resultado_hembra`); en herencia `"autosómica recesiva"`, `sexo_cria` es `null` |
+
+### Alcance de esta versión
+
+No se implementan `PUT`, `PATCH` ni `DELETE` para simulaciones. El SRS 1.2 excluye la edición y eliminación general de registros, y la base de datos mantiene el historial de simulaciones por criadero.
+
 ## Gestión de títulos
 
 La gestión de títulos de competencia está disponible para el usuario autenticado con rol `criador` y queda limitada a los ejemplares de su propio criadero (SRS-RF023, SEG-001). Los títulos se registran sobre el anillo de un ejemplar ya registrado; si el anillo no existe en el criadero, el registro se rechaza.
@@ -843,6 +919,9 @@ No se implementa `DELETE` para títulos. El SRS exige conservar el historial al 
 ## Pendiente de coordinar
 
 - Carga administrativa del nomenclador, siglas de club y mutaciones (SRS-RF010/RF011/RF027): requiere su propio endpoint con archivo XLSX/CSV; no está en las rutas de solo lectura de esta sección.
+- Avisar a Frontend que se incorporaron los endpoints de `cría` (`/api/v1/crias`) además de `pareja`, `cruce` y `nidada`.
+- Avisar a Frontend que se incorporaron los endpoints de simulación genética (`/api/v1/simulaciones`) con desglose en `simulacion_resultado`.
+
 - Avisar a Frontend que se incorporaron los endpoints de `cría` (`/api/v1/crias`) y de `título` (`/api/v1/titulos`, incluida la descendencia de un ganador) además de `pareja`, `cruce` y `nidada`.
 
 Si una operación cambia, actualizar este documento y avisar a las áreas que la usan antes de integrar el cambio.
