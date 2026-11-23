@@ -13,7 +13,6 @@ Esta carpeta contiene la versión 7.1 del modelo de datos de CanariApp: el esque
 | `catalogo/seeds/variedad_2026_v7_1.sql` | Carga el nomenclador 2026 (2.661 variedades) | En la base que usa la app, después de los permisos |
 | `admin_inicial_v7_1.sql` | Crea el primer usuario administrador | En la base que usa la app, una sola vez |
 | `MER_canarios_v7_1.drawio` | Diagrama entidad-relación | Para entender y presentar el modelo |
-| `Cambios_v7_1.md` | Qué cambió respecto a la v7 y por qué | Para quien revisa o ya conocía la v7 |
 
 ## Orden de ejecución
 
