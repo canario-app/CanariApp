@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CanariApp\Backend\Controllers;
 
+use CanariApp\Backend\Helpers\AuditHelper;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
@@ -27,12 +28,22 @@ class CanaryController {
         'requiere_revision',
     ];
 
+    /** Metadatos aceptados cuando se activa el Modo de Corrección en PATCH/PUT. */
+    private const CORRECTION_META_FIELDS = [
+        'modo_correccion',
+        'motivo',
+        'id_solicitud',
+        'anular_parejas',
+    ];
+
     /**
-     * [Criador] Lista sus canarios. [Admin] Lista todos.
+     * [Criador] Lista sus canarios. [Admin] Recibe 403 Forbidden.
      */
     public function index(): void {
+        $this->ensureBreederRole();
+
         $model = new Canary();
-        $idCriador = $this->isAdmin() ? null : $this->currentBreederId();
+        $idCriador = $this->currentBreederId();
 
         $filters = [
             'buscar'      => $this->queryString('buscar'),
@@ -48,9 +59,11 @@ class CanaryController {
     }
 
     /**
-     * Muestra un canario. Un criador no puede ver los de otro criadero.
+     * [Criador] Muestra un canario propio. [Admin] Recibe 403 Forbidden.
      */
     public function show(int|string $id): void {
+        $this->ensureBreederRole();
+
         $idCanario = $this->parseId($id);
         $model = new Canary();
         $canario = $model->findDetailed($idCanario);
@@ -65,40 +78,59 @@ class CanaryController {
     }
 
     /**
-     * Crea un canario. El criador se toma del token; el administrador debe
-     * indicar `id_criador` en el cuerpo.
+     * [Criador] Crea un canario en su criadero. [Admin] Recibe 403 Forbidden.
      */
     public function store(): void {
+        $this->ensureBreederRole();
+
         $input = $this->getJsonInput();
-        $errors = $this->validate($input, true);
+        $errors = $this->validate($input, true, false);
         if ($errors !== []) {
             ResponseHelper::validationError($errors);
         }
 
-        $idCriador = $this->isAdmin()
-            ? $this->positiveInt($input['id_criador']) ?? 0
-            : $this->currentBreederId();
+        $idCriador = $this->currentBreederId();
+        $filtered = $this->filterFields($input);
 
         $model = new Canary();
-        $result = $model->createForBreeder($this->filterFields($input), $idCriador);
+        $result = $model->createForBreeder($filtered, $idCriador);
 
         if (is_string($result)) {
             $this->handleError($result);
             return;
         }
 
-        $creado = $model->findDetailed($result) ?? ['id_canario' => $result];
+        $createdId = (int) $result;
+        $creado = $model->findDetailed($createdId) ?? ['id_canario' => $createdId];
+
+        AuditHelper::log(
+            action: 'insert',
+            entity: 'canario',
+            recordId: $createdId,
+            newValue: $filtered,
+            reason: 'Registro de nuevo ejemplar',
+            userId: (int) AuthMiddleware::userId()
+        );
+
         ResponseHelper::created($creado, 'Canario creado exitosamente.');
     }
 
-   /**
-     * Actualiza un canario propio (criador) o cualquiera (administrador).
-     * Los campos omitidos conservan su valor; id_criador es inmutable.
+    /**
+     * [Criador] Actualiza un canario propio.
+     *
+     * Sin Modo de Corrección bloquea la modificación de `anillo` y de `sexo`
+     * ya asignado. Con Modo de Corrección (`X-Correction-Mode: true` o
+     * `modo_correccion: true`) exige `motivo` y audita la corrección.
      */
     public function update(int|string $id): void {
+        $this->ensureBreederRole();
+
         $idCanario = $this->parseId($id);
         $input = $this->getJsonInput();
-        $errors = $this->validate($input, false);
+        $isCorrectionMode = $this->isCorrectionModeActive($input);
+        $isPatch = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'PATCH') === 'PATCH';
+
+        $errors = $this->validate($input, false, $isCorrectionMode);
         if ($errors !== []) {
             ResponseHelper::validationError($errors);
         }
@@ -111,15 +143,67 @@ class CanaryController {
 
         $this->assertVisible($actual);
 
-        $targetBreederId = $this->isAdmin()
-            ? (int) $actual['id_criador']
-            : $this->currentBreederId();
+        // Bloquea intento de modificar anillo o sobrescribir sexo sin Modo de Corrección
+        if (!$isCorrectionMode) {
+            if (
+                array_key_exists('anillo', $input)
+                && ($isPatch || trim((string) $input['anillo']) !== (string) $actual['anillo'])
+            ) {
+                ResponseHelper::forbidden(
+                    'Debe activar el Modo de Corrección para modificar el anillo de un ejemplar.'
+                );
+            }
 
-        $result = $model->updateForBreeder(
-            $idCanario,
-            $this->filterFields($input),
-            $targetBreederId
-        );
+            if (
+                array_key_exists('sexo', $input)
+                && $actual['sexo'] !== null
+                && ($isPatch || $input['sexo'] !== $actual['sexo'])
+            ) {
+                ResponseHelper::forbidden(
+                    'Debe activar el Modo de Corrección para modificar el sexo de un ejemplar ya sexado.'
+                );
+            }
+        }
+
+        $targetBreederId = $this->currentBreederId();
+        $filtered = $this->filterFields($input);
+
+        if ($isCorrectionMode) {
+            $reason = trim((string) ($input['motivo'] ?? ''));
+            $requestId = isset($input['id_solicitud']) ? $this->positiveInt($input['id_solicitud']) : null;
+            $annulPairs = filter_var($input['anular_parejas'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            $correctionResult = $model->updateWithCorrection(
+                $idCanario,
+                $filtered,
+                $targetBreederId,
+                $annulPairs
+            );
+
+            if (is_string($correctionResult)) {
+                $this->handleError($correctionResult);
+                return;
+            }
+
+            AuditHelper::log(
+                action: 'correccion',
+                entity: 'canario',
+                recordId: $idCanario,
+                previousValue: $this->extractTrackedSnapshot($correctionResult['previous'], $filtered),
+                newValue: $filtered,
+                reason: $reason,
+                userId: (int) AuthMiddleware::userId(),
+                requestingBreederId: $targetBreederId,
+                requestId: $requestId
+            );
+
+            ResponseHelper::success(
+                $correctionResult['updated'],
+                'Canario corregido exitosamente en Modo de Corrección.'
+            );
+        }
+
+        $result = $model->updateForBreeder($idCanario, $filtered, $targetBreederId);
 
         if (is_string($result)) {
             $this->handleError($result);
@@ -127,7 +211,61 @@ class CanaryController {
         }
 
         $actualizado = $model->findDetailed($idCanario);
+
+        if ($filtered !== []) {
+            AuditHelper::log(
+                action: 'update',
+                entity: 'canario',
+                recordId: $idCanario,
+                previousValue: $this->extractTrackedSnapshot($actual, $filtered),
+                newValue: $filtered,
+                reason: 'Actualización de datos del ejemplar',
+                userId: (int) AuthMiddleware::userId()
+            );
+        }
+
         ResponseHelper::success($actualizado, 'Canario actualizado exitosamente.');
+    }
+
+    /**
+     * Exige que el usuario autenticado tenga rol 'criador'; devuelve 403 en caso contrario.
+     */
+    private function ensureBreederRole(): void {
+        if (AuthMiddleware::userRole() !== 'criador') {
+            ResponseHelper::forbidden('Solo los usuarios con rol criador pueden acceder a este recurso.');
+        }
+    }
+
+    /**
+     * Detecta si el cliente activó el Modo de Corrección por cabecera o cuerpo JSON.
+     *
+     * @param array<string, mixed> $input
+     */
+    private function isCorrectionModeActive(array $input): bool {
+        $headerValue = $_SERVER['HTTP_X_CORRECTION_MODE'] ?? null;
+
+        if ($headerValue === null && function_exists('getallheaders')) {
+            $headers = array_change_key_case(getallheaders(), CASE_LOWER);
+            $headerValue = $headers['x-correction-mode'] ?? null;
+        }
+
+        if ($headerValue !== null && filter_var($headerValue, FILTER_VALIDATE_BOOLEAN)) {
+            return true;
+        }
+
+        return array_key_exists('modo_correccion', $input)
+            && filter_var($input['modo_correccion'], FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Extrae únicamente los valores previos de los campos que se intentan actualizar.
+     *
+     * @param array<string, mixed> $current
+     * @param array<string, mixed> $updatedFields
+     * @return array<string, mixed>
+     */
+    private function extractTrackedSnapshot(array $current, array $updatedFields): array {
+        return array_intersect_key($current, $updatedFields);
     }
 
     /**
@@ -136,10 +274,6 @@ class CanaryController {
      * @param array<string, mixed> $canario
      */
     private function assertVisible(array $canario): void {
-        if ($this->isAdmin()) {
-            return;
-        }
-
         if ((int) $canario['id_criador'] !== $this->currentBreederId()) {
             ResponseHelper::forbidden('El canario pertenece a otro criador.');
         }
@@ -151,7 +285,7 @@ class CanaryController {
      * @param array<string, mixed> $input
      * @return array<string, string>
      */
-    private function validate(array $input, bool $isCreate): array {
+    private function validate(array $input, bool $isCreate, bool $isCorrectionMode): array {
         $errors = [];
 
         foreach (self::SERVER_FIELDS as $field) {
@@ -160,17 +294,32 @@ class CanaryController {
             }
         }
 
-        if (!$isCreate && array_key_exists('id_criador', $input)) {
-            $errors['id_criador'] = 'El criador dueño del ejemplar no se puede modificar.';
+        if (array_key_exists('id_criador', $input)) {
+            $errors['id_criador'] = $isCreate
+                ? 'El criador se toma del usuario autenticado.'
+                : 'El criador dueño del ejemplar no se puede modificar.';
         }
 
         if ($isCreate) {
-            if (!$this->isAdmin() && array_key_exists('id_criador', $input)) {
-                $errors['id_criador'] = 'El criador se toma del usuario autenticado.';
+            foreach (self::CORRECTION_META_FIELDS as $metaField) {
+                if (array_key_exists($metaField, $input)) {
+                    $errors[$metaField] = 'El Modo de Corrección solo aplica en edición de ejemplares.';
+                }
+            }
+        } elseif ($isCorrectionMode) {
+            $motivo = is_string($input['motivo'] ?? null) ? trim($input['motivo']) : '';
+            if ($motivo === '') {
+                $errors['motivo'] = 'Debe indicar el motivo al utilizar el Modo de Corrección.';
+            } elseif (mb_strlen($motivo) > 500) {
+                $errors['motivo'] = 'El motivo no puede superar los 500 caracteres.';
             }
 
-            if ($this->isAdmin() && $this->positiveInt($input['id_criador'] ?? null) === null) {
-                $errors['id_criador'] = 'El administrador debe indicar el criador dueño del ejemplar.';
+            if (
+                array_key_exists('id_solicitud', $input)
+                && $input['id_solicitud'] !== null
+                && $this->positiveInt($input['id_solicitud']) === null
+            ) {
+                $errors['id_solicitud'] = 'El identificador de solicitud debe ser un entero positivo.';
             }
         }
 
@@ -225,6 +374,15 @@ class CanaryController {
 
     private function handleError(string $code): void {
         match ($code) {
+            'correction_mode_required' => ResponseHelper::forbidden(
+                'Debe activar el Modo de Corrección para modificar el sexo o el anillo del ejemplar.'
+            ),
+            'active_pairs_conflict' => ResponseHelper::conflict(
+                'El ejemplar participa en parejas activas o finalizadas; envíe anular_parejas=true o reasígnelas antes de corregir el sexo.'
+            ),
+            'pairs_with_matings_conflict' => ResponseHelper::conflict(
+                'El ejemplar tiene parejas con cruces registrados que no pueden anularse; debe reasignarlas antes de corregir el sexo.'
+            ),
             'conflict_anillo' => ResponseHelper::conflict('El anillo no está disponible.'),
             'invalid_reference' => ResponseHelper::validationError([
                 'canario' => 'El club, la variedad o el criador no existen.',
@@ -236,10 +394,6 @@ class CanaryController {
         };
     }
 
-    private function isAdmin(): bool {
-        return AuthMiddleware::userRole() === 'administrador';
-    }
-
     /**
      * ID del criadero asociado al usuario autenticado.
      */
@@ -249,7 +403,7 @@ class CanaryController {
             ResponseHelper::unauthorized('No hay un usuario autenticado.');
         }
 
-        $perfil = (new Breeder())->findByUserId($userId);
+        $perfil = (new Breeder())->findByUserId((int) $userId);
         if ($perfil === null) {
             ResponseHelper::forbidden('El usuario actual no tiene un criadero asociado.');
         }
@@ -264,6 +418,19 @@ class CanaryController {
         }
 
         return (int) $value;
+    }
+
+    private function parseGenerationsParam(mixed $raw): ?int {
+        if ($raw === null || (is_string($raw) && trim($raw) === '')) {
+            return Canary::DEFAULT_PEDIGREE_GENERATIONS;
+        }
+
+        $value = $this->positiveInt($raw);
+        if ($value === null || $value > Canary::MAX_PEDIGREE_GENERATIONS) {
+            return null;
+        }
+
+        return $value;
     }
 
     private function positiveInt(mixed $value): ?int {
@@ -284,6 +451,8 @@ class CanaryController {
 
     /**
      * Lee y decodifica el cuerpo JSON de la petición.
+     *
+     * @return array<string, mixed>
      */
     private function getJsonInput(): array {
         $raw = file_get_contents('php://input');
@@ -297,5 +466,34 @@ class CanaryController {
         }
 
         return $decoded;
+    }
+
+    /**
+     * [Criador] Devuelve el árbol de ascendencia (pedigrí) de un canario propio.
+     * Admite ?generaciones=1..6 (por defecto 4).
+     */
+    public function ancestry(int|string $id): void {
+        $this->ensureBreederRole();
+
+        $idCanario = $this->parseId($id);
+        $generaciones = $this->parseGenerationsParam($_GET['generaciones'] ?? null);
+        if ($generaciones === null) {
+            ResponseHelper::badRequest(
+                'El parámetro generaciones debe ser un entero entre 1 y ' . Canary::MAX_PEDIGREE_GENERATIONS . '.'
+            );
+        }
+
+        $model = new Canary();
+        $canario = $model->findDetailed($idCanario);
+
+        if ($canario === null) {
+            ResponseHelper::notFound('Canario no encontrado.');
+        }
+
+        $this->assertVisible($canario);
+
+        $pedigree = $model->findAncestry($idCanario, $generaciones);
+
+        ResponseHelper::success($pedigree, 'Ascendencia del canario obtenida.');
     }
 }

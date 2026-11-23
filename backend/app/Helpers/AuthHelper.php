@@ -68,17 +68,14 @@ class AuthHelper {
      * Registra el cierre de sesión en auditoria invalidando el hash SHA-256 del token actual.
      */
     public static function revokeToken(string $token, int $userId): void {
-        $db = Db::getConnection();
-
-        $stmt = $db->prepare(
-            "INSERT INTO auditoria (id_usuario, accion, entidad, id_registro, valor_nuevo, motivo)
-             VALUES (:id_usuario, 'logout', 'sesion', :id_registro, :token_hash, 'Cierre de sesión de usuario')"
+        AuditHelper::log(
+            action: 'logout',
+            entity: 'sesion',
+            recordId: $userId,
+            newValue: hash('sha256', $token),
+            reason: 'Cierre de sesión de usuario',
+            userId: $userId
         );
-        $stmt->execute([
-            'id_usuario'  => $userId,
-            'id_registro' => $userId,
-            'token_hash'  => hash('sha256', $token),
-        ]);
     }
 
     /**

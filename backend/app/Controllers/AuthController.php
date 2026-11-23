@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace CanariApp\Backend\Controllers;
 
-use CanariApp\Backend\Helpers\ResponseHelper;
+use CanariApp\Backend\Helpers\AuditHelper;
 use CanariApp\Backend\Helpers\AuthHelper;
+use CanariApp\Backend\Helpers\ResponseHelper;
+use CanariApp\Backend\Middlewares\AuthMiddleware;
 use CanariApp\Backend\Models\Breeder;
 use CanariApp\Backend\Models\User;
 use Throwable;
@@ -32,10 +34,23 @@ class AuthController {
             ResponseHelper::unauthorized('Credenciales incorrectas.');
         }
 
+        $userId = (int) $user['id_usuario'];
         $token = AuthHelper::generateToken(
-            $user['id_usuario'],
+            $userId,
             $user['correo'],
             $user['rol']
+        );
+
+        AuditHelper::log(
+            action: 'login',
+            entity: 'sesion',
+            recordId: $userId,
+            newValue: [
+                'correo' => $user['correo'],
+                'rol'    => $user['rol'],
+            ],
+            reason: 'Inicio de sesión exitoso',
+            userId: $userId
         );
 
         unset($user['password_hash']);
@@ -133,21 +148,55 @@ class AuthController {
         }
 
         $rol = 'criador';
+        $adminId = AuthMiddleware::userId() !== null ? (int) AuthMiddleware::userId() : null;
 
         try {
             $userModel->beginTransaction();
 
-            $userId = $userModel->create([
-                'nombre'   => $nombre,
-                'correo'   => $correo,
-                'password' => $password,
-                'rol'      => $rol,
-            ]);
+            [$userId, $criadorId] = AuditHelper::withoutAutoAudit(
+                function () use ($userModel, $criadorModel, $nombre, $correo, $password, $rol, $numeroSocio, $adminId): array {
+                    $newUserId = (int) $userModel->create([
+                        'nombre'   => $nombre,
+                        'correo'   => $correo,
+                        'password' => $password,
+                        'rol'      => $rol,
+                    ]);
 
-            $criadorId = $criadorModel->create([
-                'id_usuario'   => $userId,
-                'numero_socio' => $numeroSocio,
-            ]);
+                    $newCriadorId = (int) $criadorModel->create([
+                        'id_usuario'   => $newUserId,
+                        'numero_socio' => $numeroSocio,
+                    ]);
+
+                    AuditHelper::log(
+                        action: 'insert',
+                        entity: 'usuario',
+                        recordId: $newUserId,
+                        newValue: [
+                            'nombre' => $nombre,
+                            'correo' => $correo,
+                            'rol'    => $rol,
+                        ],
+                        reason: 'Registro de usuario criador por administrador',
+                        userId: $adminId,
+                        db: $userModel->getConnection()
+                    );
+
+                    AuditHelper::log(
+                        action: 'insert',
+                        entity: 'criador',
+                        recordId: $newCriadorId,
+                        newValue: [
+                            'id_usuario'   => $newUserId,
+                            'numero_socio' => $numeroSocio,
+                        ],
+                        reason: 'Creación de criadero asociado al registro',
+                        userId: $adminId,
+                        db: $userModel->getConnection()
+                    );
+
+                    return [$newUserId, $newCriadorId];
+                }
+            );
 
             $userModel->commit();
         } catch (Throwable $e) {
