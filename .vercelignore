@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+ACCESO_*.txt
+.vercel-token
+.git
+BaseDatos
+docs
+docker
+compose.yaml
+*.cmd
+*.png
+*.drawio
+*.docx
+*.xlsx
+*.pdf
+backend/storage/logs/*
