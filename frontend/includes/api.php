@@ -3,7 +3,8 @@
  * Cliente HTTP de la API de CanariApp (backend PHP + PostgreSQL).
  * El token JWT vive en $_SESSION['token']; las llamadas salen desde el servidor PHP, así que no hace falta CORS.
  */
-const API_URL = 'http://localhost:8000';
+// En Docker/servidor se define con la variable de entorno API_URL; en XAMPP local queda localhost:8000.
+define('API_URL', rtrim(getenv('API_URL') ?: 'http://localhost:8000', '/'));
 
 // Devuelve ['status' => int, 'data' => mixed, 'message' => string, 'errors' => array]
 function api($metodo, $ruta, $cuerpo = null, $conToken = true) {

@@ -141,7 +141,8 @@ class Simulation extends BaseModel {
             $genotipoHembra
         );
 
-        $pdo = $this->db->getConnection();
+        // BaseModel (rama 31) ya expone la conexión PDO en $this->db
+        $pdo = $this->db;
         $pdo->beginTransaction();
 
         try {
