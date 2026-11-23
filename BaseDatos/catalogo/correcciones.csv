@@ -1,0 +1,36 @@
+codigo,campo,valor_pdf,valor_corregido,motivo,aprobado_por
+D..881,codigo,D..881,D.881,"Doble punto en el PDF (confirmado visualmente, p. 27). Con D..881 la secuencia D.001-D.880 se rompe y el código no cumple el formato D.nnn.",Equipo BD
+,serie,Serie Mutaciones en EstuD.io,Serie Mutaciones en Estudio,"Artefacto «D.» del PDF: la letra d aparece como «D.» en encabezados (también «NomenclaD.or», «D.e Color»).",Equipo BD
+,serie,Serie Negro Jaspe SD. sin Factor,Serie Negro Jaspe SD sin Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Negro Jaspe SD. con Factor,Serie Negro Jaspe SD con Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Bruno Jaspe SD. sin Factor,Serie Bruno Jaspe SD sin Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Bruno Jaspe SD. con Factor,Serie Bruno Jaspe SD con Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Ágata Jaspe SD. sin Factor,Serie Ágata Jaspe SD sin Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Ágata Jaspe SD. con Factor,Serie Ágata Jaspe SD con Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Isabel Jaspe SD. sin Factor,Serie Isabel Jaspe SD sin Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Isabel Jaspe SD. con Factor,Serie Isabel Jaspe SD con Factor,"Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE SD», sin punto.",Equipo BD
+,serie,Serie Negro Jaspe D.D. sin Factor,Serie Negro Jaspe DD sin Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+,serie,Serie Negro Jaspe D.D. con Factor,Serie Negro Jaspe DD con Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+,serie,Serie Bruno Jaspe D.D. sin Factor,Serie Bruno Jaspe DD sin Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+,serie,Serie Bruno Jaspe D.D. con Factor,Serie Bruno Jaspe DD con Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+,serie,Serie Ágata Jaspe D.D. sin Factor,Serie Ágata Jaspe DD sin Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+,serie,Serie Ágata Jaspe D.D. con Factor,Serie Ágata Jaspe DD con Factor,Artefacto «D.» del PDF. Las variedades de la serie dicen «JASPE DD».,Equipo BD
+E1.2003,nombre,SALENTNO SIN COPETE FDO BL OVE LIP,SALENTINO SIN COPETE FDO BL OVE LIP,Errata: falta la I. El encabezado y las otras 46 variedades de la raza dicen SALENTINO.,Equipo BD
+E1.2015,nombre,SALENTNO SIN COPETE FDO BRUNO BL OVE LIP,SALENTINO SIN COPETE FDO BRUNO BL OVE LIP,Errata: falta la I. El encabezado y las otras 46 variedades de la raza dicen SALENTINO.,Equipo BD
+E1.2028,nombre,SALENTNO CON COPETE FDO BL OVE LIP,SALENTINO CON COPETE FDO BL OVE LIP,Errata: falta la I. El encabezado y las otras 46 variedades de la raza dicen SALENTINO.,Equipo BD
+E1.2040,nombre,SALENTNO CON COPETE FDO BRUNO BL OVE LIP,SALENTINO CON COPETE FDO BRUNO BL OVE LIP,Errata: falta la I. El encabezado y las otras 46 variedades de la raza dicen SALENTINO.,Equipo BD
+E1.2031,nombre,SALENTINO CONCOPETE FDO RO INT MEL,SALENTINO CON COPETE FDO RO INT MEL,Errata: falta el espacio. Las demás variedades dicen «CON COPETE».,Equipo BD
+E1.2036,nombre,SALENTINO CONCOPETE FDO RO NEV OVE LIP,SALENTINO CON COPETE FDO RO NEV OVE LIP,Errata: falta el espacio. Las demás variedades dicen «CON COPETE».,Equipo BD
+E1.1920,nombre,REHILÄNDER CONSORTE FDO BL,REHINLÄNDER CONSORTE FDO BL,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+E1.1921,nombre,REHILÄNDER CONSORTE FDO INT,REHINLÄNDER CONSORTE FDO INT,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+E1.1922,nombre,REHILÄNDER CONSORTE FDO NEV,REHINLÄNDER CONSORTE FDO NEV,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+E1.1923,nombre,REHILÄNDER CORONA BL,REHINLÄNDER CORONA BL,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+E1.1924,nombre,REHILÄNDER CORONA INT,REHINLÄNDER CORONA INT,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+E1.1925,nombre,REHILÄNDER CORONA NEV,REHINLÄNDER CORONA NEV,El encabezado de la raza (p. 34) dice REHINLÄNDER y las 6 variedades REHILÄNDER: se unifican con el encabezado.,Equipo BD
+,serie,REHINLÄNDER,RHEINLÄNDER,"CONSULTA AL CLIENTE: la raza se escribe internacionalmente «Rheinländer» y el PDF usa REHINLÄNDER (encabezado) y REHILÄNDER (variedades). Ya se unificó con el encabezado. ¿Se usa RHEINLÄNDER? Si se aprueba, cambiar también el valor corregido de E1.1920-E1.1925.",
+E1.0507,nombre,COPETE ALEMÁN ÁGATA EUMO AMARILLO MARFIL MOSAICO,,"CONSULTA AL CLIENTE: E1.0507 y E1.0508 tienen el mismo nombre y no indican sexo. Por la secuencia parecen MACHO y HEMBRA (así está en color), pero el PDF no lo dice. Se carga el nombre literal, sin sexo.",
+E1.0508,nombre,COPETE ALEMÁN ÁGATA EUMO AMARILLO MARFIL MOSAICO,,CONSULTA AL CLIENTE: ver E1.0507.,
+E1.2012,nombre,SALENTINO SIN COPETE FDO RO NEV OVE MEL,,"CONSULTA AL CLIENTE: E1.2012 y E1.2013 tienen el mismo nombre. Salentino sin copete tiene 25 variedades y las demás razas con este esquema 24: ¿uno de los dos códigos sobra, o cuál es el nombre correcto? Se carga el nombre literal.",
+E1.2013,nombre,SALENTINO SIN COPETE FDO RO NEV OVE MEL,,CONSULTA AL CLIENTE: ver E1.2012.,
+E1.2037,nombre,SALENTINO CON COPETE FDO RO NEV OVE MEL,,"CONSULTA AL CLIENTE: E1.2037 y E1.2038 tienen el mismo nombre (mismo caso que E1.2012/E1.2013, con copete). Se carga el nombre literal.",
+E1.2038,nombre,SALENTINO CON COPETE FDO RO NEV OVE MEL,,CONSULTA AL CLIENTE: ver E1.2037.,
