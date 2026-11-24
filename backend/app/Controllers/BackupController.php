@@ -160,8 +160,8 @@ class BackupController {
      *
      * Reglas:
      *  - Rechaza la operación en modo normal; solo se permite en mantenimiento o emergencia.
-     *  - Ejecuta psql usando el usuario dueño de las tablas (DB_RESTORE_USER / postgres)
-     *    sin otorgar permisos de borrado al usuario de aplicación (canariapp).
+     *  - Ejecuta psql en una única transacción (--single-transaction) usando el usuario dueño
+     *    de las tablas (DB_RESTORE_USER / postgres) sin otorgar permisos de borrado a canariapp.
      */
     public function restore(int|string $id): void {
         $adminUserId = $this->ensureAdminRole();
@@ -209,7 +209,7 @@ class BackupController {
 
             if (!$this->restorePhysicalDump($targetPath)) {
                 ResponseHelper::internalError(
-                    'No se pudo restaurar el respaldo mediante psql; verifique las credenciales de propietario (DB_RESTORE_USER) y la integridad del archivo SQL.'
+                    'No se pudo restaurar el respaldo mediante psql; revise el log del servidor y verifique las credenciales de propietario (DB_RESTORE_USER) y la integridad del archivo SQL.'
                 );
                 return;
             }
@@ -390,40 +390,31 @@ class BackupController {
     }
 
     /**
-     * Restaura un archivo SQL de respaldo en PostgreSQL mediante psql usando
-     * el usuario propietario de las tablas (DB_RESTORE_USER / postgres) (SRS-RF029).
+     * Restaura un archivo SQL de respaldo en PostgreSQL mediante psql en una sola transacción
+     * (--single-transaction / -1) usando el usuario propietario de las tablas (SRS-RF029).
+     *
+     * Si ocurre cualquier error durante la carga, PostgreSQL ejecuta ROLLBACK completo
+     * dejando intacto el estado previo de la base de datos y registrando el detalle en log.
      */
     private function restorePhysicalDump(string $targetPath): bool {
-        if (!function_exists('exec') || !is_file($targetPath)) {
+        if (!function_exists('exec')) {
+            $this->logRestoreError('La función exec() está deshabilitada en PHP; no se puede ejecutar psql.');
+            return false;
+        }
+
+        if (!is_file($targetPath)) {
+            $this->logRestoreError(sprintf('Archivo de respaldo no encontrado en disco: %s', basename($targetPath)));
             return false;
         }
 
         $db = $this->restoreDatabaseCredentials();
         if ($db === null) {
+            $this->logRestoreError('Credenciales de restauración no configuradas (DB_HOST, DB_NAME, DB_RESTORE_USER).');
             return false;
         }
 
-        $sqlPreview = (string) @file_get_contents($targetPath, false, null, 0, 8192);
-        if (stripos($sqlPreview, 'DROP TABLE') === false) {
-            $resetCmd = sprintf(
-                'PGPASSWORD=%s psql -v ON_ERROR_STOP=1 -h %s -p %s -U %s -d %s -c %s 2>/dev/null',
-                escapeshellarg($db['pass']),
-                escapeshellarg($db['host']),
-                escapeshellarg($db['port']),
-                escapeshellarg($db['user']),
-                escapeshellarg($db['name']),
-                escapeshellarg('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;')
-            );
-            $resetOut = [];
-            $resetCode = 1;
-            @exec($resetCmd, $resetOut, $resetCode);
-            if ($resetCode !== 0) {
-                return false;
-            }
-        }
-
         $command = sprintf(
-            'PGPASSWORD=%s psql -v ON_ERROR_STOP=1 -h %s -p %s -U %s -d %s -f %s 2>/dev/null',
+            'PGPASSWORD=%s psql --single-transaction -v ON_ERROR_STOP=1 -h %s -p %s -U %s -d %s -f %s 2>&1',
             escapeshellarg($db['pass']),
             escapeshellarg($db['host']),
             escapeshellarg($db['port']),
@@ -436,7 +427,36 @@ class BackupController {
         $exitCode = 1;
         @exec($command, $output, $exitCode);
 
-        return $exitCode === 0;
+        if ($exitCode !== 0) {
+            $details = trim(implode("\n", $output));
+            $this->logRestoreError(sprintf(
+                'Fallo al restaurar "%s" con usuario "%s" (exit=%d): %s',
+                basename($targetPath),
+                $db['user'],
+                $exitCode,
+                $details !== '' ? $details : 'sin salida de error de psql'
+            ));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Registra errores de restauración de respaldos en error_log y en storage/logs/restore.log.
+     */
+    private function logRestoreError(string $message): void {
+        error_log('[CanariApp][BackupRestore] ' . $message);
+
+        $logDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0750, true);
+        }
+
+        if (is_dir($logDir) && is_writable($logDir)) {
+            $line = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
+            @file_put_contents($logDir . DIRECTORY_SEPARATOR . 'restore.log', $line, FILE_APPEND | LOCK_EX);
+        }
     }
 
     /**
