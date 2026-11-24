@@ -16,7 +16,23 @@ if (isset($_GET['salir'])) {
 
 $rol = $c['sexo'] === 'Hembra' ? 'hembra' : 'macho';           // rol actual en sus parejas
 $sus_parejas = array_filter(parejas_de($k), fn($p) => $p['estado'] !== 'Anulada' && $p[$rol] === $k);
-$candidatos = array_filter(por_sexo($c['sexo'] ?: 'Macho'), fn($x) => clave($x) !== $k);
+$el_rol = $rol === 'macho' ? 'el macho' : 'la hembra';
+$verdadero = $rol === 'macho' ? 'el verdadero padre' : 'la verdadera madre';
+// Candidatos para reasignar cada pareja (SRS-RF012 a RF015): mismo sexo, no crías de esa pareja
+// y, si la pareja está activa, sin otra pareja activa (hembra) o con cupo (macho)
+$candidatos_de = function ($pid, $p) use ($c, $k, $rol) {
+    $crias = crias_de_pareja($pid);
+    $ops = [];
+    foreach (por_sexo($c['sexo'] ?: 'Macho') as $ck => $x) {
+        if ($ck === $k || isset($crias[$ck])) continue;
+        if ($p['estado'] === 'Activa') {
+            $act = count(parejas_activas_de($ck));
+            if ($rol === 'hembra' ? $act > 0 : $act >= MAX_PAREJAS_MACHO) continue;
+        }
+        $ops[$ck] = 'Reasignar a ' . anillo_txt($x);
+    }
+    return $ops;
+};
 
 $v = ['sexo' => $c['sexo'], 'variedad' => variedad_txt($c['variedad'])];
 $decision = [];
@@ -31,40 +47,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cod = leer_variedad($v['variedad']);
     if (!$cod) $err['variedad'] = 'Elija una variedad de la lista del nomenclador.';
     elseif ($m = error_variedad_sexo($cod, $v['sexo'])) $err['variedad'] = $m;
+    if (!$err && $v['sexo'] === $c['sexo'] && $cod === $c['variedad']) $err['sexo'] = 'No cambió el sexo ni la variedad.';
 
     $cambia_sexo = $c['sexo'] && $v['sexo'] !== $c['sexo'];
     if ($cambia_sexo) {
         foreach ($sus_parejas as $pid => $p) {
             $d = $decision[$pid] ?? '';
             $con_crias = count(crias_de_pareja($pid)) > 0;
-            if ($d === '' || ($d === 'anular' && $con_crias) || ($d !== 'anular' && !isset($candidatos[$d]))) {
-                $err["p$pid"] = $con_crias ? 'Con crías: debe reasignarse al verdadero padre.' : 'Elija qué hacer con esta pareja.';
+            if ($d === '' || ($d === 'anular' && $con_crias) || ($d !== 'anular' && !isset($candidatos_de($pid, $p)[$d]))) {
+                $err["p$pid"] = $con_crias ? "Con crías: debe reasignarse a $verdadero." : 'Elija qué hacer con esta pareja.';
             }
         }
     }
+    // La API pide la contraseña en cada corrección (SRS-RF030); se confirma antes de tocar las parejas
+    $clave = $_POST['clave'] ?? '';
+    if (!$err && !verificar_clave($_SESSION['usuario']['correo'], $clave)) $err['clave'] = 'Contraseña incorrecta.';
 
     if (!$err) {
+        // Primero las parejas (el ejemplar todavía tiene el sexo anterior) y después el ejemplar
         if ($cambia_sexo) {
-            $campo = $rol === 'macho' ? 'padre' : 'madre';
             foreach ($sus_parejas as $pid => $p) {
-                if ($decision[$pid] === 'anular') {
-                    $p['estado'] = 'Anulada';
-                } else {
-                    $p[$rol] = $decision[$pid];
-                    foreach (crias_de_pareja($pid) as $cria) { $cria[$campo] = $decision[$pid]; guardar_canario($cria); }
-                }
-                guardar_pareja($pid, $p);
+                $r = corregir_pareja($pid, $rol, $decision[$pid], $motivo);
+                cortar_si_mantenimiento($r);
+                if ($r['status'] < 200 || $r['status'] >= 300) { $err['api'] = 'Pareja de la jaula ' . $p['jaula'] . ': ' . motivo_api($r); break; }
             }
         }
-        $antes = trim("{$c['sexo']} · {$c['variedad']}", ' ·');
-        $c['sexo'] = $v['sexo'];
-        $c['variedad'] = $cod;
-        $c['estado'] = '';
-        guardar_canario($c);
-        // Registro de auditoría (en la BD: tabla correccion con valor anterior, nuevo, motivo y usuario)
-        $_SESSION['db']['log_correcciones'][] = ['canario' => $k, 'antes' => $antes, 'despues' => "{$c['sexo']} · $cod", 'motivo' => $motivo, 'usuario' => $_SESSION['usuario']['correo'], 'fecha' => date('c')];
-        unset($_SESSION['correccion'][$k]);
-        redirigir($ficha, 'Corrección guardada', "Antes: $antes. Ahora: {$c['sexo']} · $cod.");
+        if (!$err) {
+            $r = corregir_canario($c, $v['sexo'], $cod, $motivo, $clave);
+            cortar_si_mantenimiento($r);
+            if ($r['status'] < 200 || $r['status'] >= 300) $err['api'] = motivo_api($r);
+        }
+        if (!$err) {
+            $antes = trim("{$c['sexo']} · {$c['variedad']}", ' ·');
+            unset($_SESSION['correccion'][$k]);
+            redirigir($ficha, 'Corrección guardada', "Antes: $antes. Ahora: {$v['sexo']} · $cod. Quedó registrada en la auditoría con el motivo y su usuario.");
+        }
     }
 }
 
@@ -88,7 +105,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 
 <form method="POST" style="display:flex;flex-direction:column;gap:20px" novalidate>
   <?php if ($err): ?>
-    <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>No se pudo guardar la corrección</strong><p>Revise los campos marcados.</p></div></div>
+    <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>No se pudo guardar la corrección</strong><p><?= e($err['api'] ?? 'Revise los campos marcados.') ?></p></div></div>
   <?php endif; ?>
 
   <section class="seccion">
@@ -115,15 +132,14 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
   <?php if ($sus_parejas): $pend = count($sus_parejas); ?>
   <section class="seccion">
     <h2>Decida qué hacer con sus parejas <span class="badge badge-borde" style="font-weight:400"><?= $pend ?> pendiente<?= $pend > 1 ? 's' : '' ?></span></h2>
-    <p class="small muted" style="max-width:640px">Si cambia el sexo, el ejemplar ya no puede ser el <?= $rol ?> de estas parejas. Las parejas con crías deben pasar al verdadero <?= $rol === 'macho' ? 'padre' : 'madre' ?> para que ninguna cría quede sin progenitor. Si no cambia el sexo, esta sección se ignora.</p>
+    <p class="small muted" style="max-width:640px">Si cambia el sexo, el ejemplar ya no puede ser <?= $el_rol ?> de estas parejas. Las parejas con crías deben pasar a <?= $verdadero ?> para que ninguna cría quede sin progenitor. Si no cambia el sexo, esta sección se ignora.</p>
     <table class="tabla">
       <thead><tr><th>Pareja con</th><th>Jaula</th><th>Estado</th><th>Crías</th><th>Decisión</th></tr></thead>
       <tbody>
       <?php foreach ($sus_parejas as $pid => $p):
         $otro = canario($p[$rol === 'macho' ? 'hembra' : 'macho']);
         $n = count(crias_de_pareja($pid));
-        $ops = $n ? [] : ['anular' => 'Anular pareja'];
-        foreach ($candidatos as $ck => $x) $ops[$ck] = 'Reasignar a ' . anillo_txt($x);
+        $ops = ($n ? [] : ['anular' => 'Anular pareja']) + $candidatos_de($pid, $p);
       ?>
         <tr>
           <td><strong><?= e($otro['numero']) ?> <?= $rol === 'macho' ? '♀' : '♂' ?></strong><span class="sub"><?= e("{$otro['club']} · {$otro['socio']} · {$otro['temp']}") ?></span></td>
@@ -132,7 +148,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
           <td><?= $n ?></td>
           <td style="width:320px">
             <select class="input<?= isset($err["p$pid"]) ? ' error' : '' ?>" name="decision[<?= $pid ?>]"><?= select_opciones($ops, $decision[$pid] ?? '', 'Elija una opción') ?></select>
-            <?= $msg("p$pid") ?: '<span class="ayuda-campo">' . ($n ? 'Con crías: debe reasignarse al verdadero ' . ($rol === 'macho' ? 'padre' : 'madre') . '.' : ($p['estado'] === 'Activa' ? 'Activa sin crías: puede reasignarse o anularse.' : 'Sin crías: puede reasignarse o anularse.')) . '</span>' ?>
+            <?= $msg("p$pid") ?: '<span class="ayuda-campo">' . ($n ? "Con crías: debe reasignarse a $verdadero." : ($p['estado'] === 'Activa' ? 'Activa sin crías: puede reasignarse o anularse.' : 'Sin crías: puede reasignarse o anularse.')) . '</span>' ?>
           </td>
         </tr>
       <?php endforeach; ?>
@@ -140,8 +156,16 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
     </table>
   </section>
 
-  <div class="aviso"><?= icono('info') ?><div><strong>Si el verdadero <?= $rol === 'macho' ? 'padre' : 'madre' ?> no está registrado</strong><p>Regístrelo primero en <a href="canario_registrar.php" style="text-decoration:underline">«Registrar ejemplar»</a> y vuelva a esta corrección.</p></div></div>
+  <div class="aviso"><?= icono('info') ?><div><strong>Si <?= $verdadero ?> no está <?= $rol === 'macho' ? 'registrado' : 'registrada' ?></strong><p>Regístrelo primero en <a href="canario_registrar.php" style="text-decoration:underline">«Registrar ejemplar»</a> y vuelva a esta corrección.</p></div></div>
   <?php endif; ?>
+
+  <section class="seccion">
+    <div class="campo<?= isset($err['clave']) ? ' error' : '' ?>" style="max-width:320px">
+      <label for="clave">Contraseña</label>
+      <input class="input" type="password" id="clave" name="clave" autocomplete="current-password">
+      <?= $msg('clave') ?: '<span class="ayuda-campo">Confirme su contraseña para guardar la corrección.</span>' ?>
+    </div>
+  </section>
 
   <div class="acciones-form">
     <a href="canario_correccion.php?id=<?= e(urlencode($k)) ?>&salir=1" class="btn">Cancelar corrección</a>

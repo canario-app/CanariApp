@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$bloqueado) {
 
     if ($u && in_array($u['rol'], ['criador', 'administrador'], true)) {
         session_regenerate_id(true);
-        unset($_SESSION['intentos'], $_SESSION['bloqueo_hasta'], $_SESSION['catalogo']);
+        unset($_SESSION['intentos'], $_SESSION['bloqueo_hasta'], $_SESSION['catalogo'], $_SESSION['mi_socio']);
         $_SESSION['token'] = $r['data']['token'];
         $_SESSION['usuario'] = ['id' => $u['id_usuario'], 'nombre' => $u['nombre'], 'correo' => mb_strtolower($u['correo']), 'rol' => $u['rol']];
         $_SESSION['ultima_actividad'] = time();

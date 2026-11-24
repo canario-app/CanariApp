@@ -124,7 +124,7 @@ $estados = [
   <?php else: ?>
   <table class="tabla">
     <thead>
-      <tr><th>Anillo</th><th>Sexo</th><th>Variedad</th><th>Portadora</th><th>Reservada</th><th>Estado</th><th></th></tr>
+      <tr><th>Anillo</th><th>Sexo</th><th>Variedad</th><th>Portador/a</th><th>Reservada</th><th>Estado</th><th></th></tr>
     </thead>
     <tbody>
       <?php foreach ($lista as $k => $c): ?>
@@ -132,7 +132,7 @@ $estados = [
         <td><?= anillo_html($c) ?></td>
         <td><?= $c['sexo'] ? e($c['sexo']) : '<span class="badge badge-tenue">Pendiente</span>' ?></td>
         <td style="max-width:170px"><?= $c['variedad'] ? e(variedad_txt($c['variedad'])) : '<span class="badge badge-tenue">Pendiente</span>' ?></td>
-        <td><?= $c['portadora'] ? '<span class="badge badge-borde">Portadora · ' . e($c['portadora']) . '</span>' : '<span class="muted">—</span>' ?></td>
+        <td><?= $c['portadora'] ? '<span class="badge badge-borde">' . portador_txt($c) . ' · ' . e($c['portadora']) . '</span>' : '<span class="muted">—</span>' ?></td>
         <td><?= $c['reservada'] ? '<span class="badge">Reservada</span>' : '<span class="muted">—</span>' ?></td>
         <td><?= $estados[$c['estado']] ?? '' ?></td>
         <td class="acciones">

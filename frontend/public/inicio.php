@@ -8,18 +8,24 @@ $n_parejas  = count(array_filter(parejas(), fn($p) => $p['estado'] === 'Activa')
 $n_jaulas   = count(jaulas_ocupadas());
 $n_crias    = count(array_filter(canarios(), fn($c) => $c['nidada']));
 $n_titulos  = count(array_unique(array_column(titulos(), 'canario')));
+$n_revision = count(array_filter(canarios(), fn($c) => $c['estado'] === 'revision'));
+$pl = fn($n, $uno, $varios) => $n . ' ' . ($n === 1 ? $uno : $varios);
 
 $tarjetas = [
-    ['ic-canarios.svg',   "Tiene $n_canarios canarios registrados", 'Registre cada ave con su número de anillo, club, socio y temporada.', 'canarios.php'],
-    ['ic-parejas.svg',    "Existen $n_parejas parejas en $n_jaulas jaulas", 'Forme parejas en su propia jaula, hasta 6 hembras por macho.', 'parejas.php'],
-    ['ic-crias.svg',      "Registró $n_crias crías", 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
-    ['ic-genealogia.svg', 'Genealogía', 'Consulte padres y abuelos antes de planificar un cruce.', 'canarios.php'],
-    ['ic-titulos.svg',    "$n_titulos canarios tienen Títulos de competencia", '', 'titulos.php'],
+    ['ic-canarios.svg',   'Tiene ' . $pl($n_canarios, 'canario registrado', 'canarios registrados'), 'Registre cada ave con su número de anillo, club, socio y temporada.', 'canarios.php'],
+    ['ic-parejas.svg',    ($n_parejas === 1 ? 'Existe ' : 'Existen ') . $pl($n_parejas, 'pareja', 'parejas') . ' en ' . $pl($n_jaulas, 'jaula', 'jaulas'), 'Forme parejas en su propia jaula, hasta 6 hembras por macho.', 'parejas.php'],
+    ['ic-crias.svg',      'Registró ' . $pl($n_crias, 'cría', 'crías'), 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
+    ['ic-genealogia.svg', 'Genealogía', 'Se consulta desde la ficha de cada canario: abra un ejemplar para ver sus padres y abuelos.', 'canarios.php'],
+    ['ic-titulos.svg',    $pl($n_titulos, 'canario tiene', 'canarios tienen') . ' Títulos de competencia', '', 'titulos.php'],
     ['ic-simulador.svg',  'Simulador genético', 'Calcule la proporción esperada de crías según la Ley de Mendel.', 'simulador.php'],
 ];
 ?>
 
 <?= flash() ?>
+
+<?php if ($n_revision): ?>
+  <div class="aviso aviso-warn"><?= icono('alerta') ?><div><strong><?= $n_revision === 1 ? '1 ejemplar requiere revisión' : "$n_revision ejemplares requieren revisión" ?></strong><p>Cambió el nomenclador y su variedad ya no coincide con el sexo registrado. <a href="canarios.php?filtro=revision" style="text-decoration:underline">Ver <?= $n_revision === 1 ? 'el ejemplar' : 'los ejemplares' ?></a></p></div></div>
+<?php endif; ?>
 
 <section style="margin-bottom:32px">
   <p class="eyebrow">Crianza de canarios de competencia</p>
