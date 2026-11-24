@@ -73,7 +73,9 @@ Documento de contrato entre Frontend, Backend y Base de Datos (`canarios_v7_1.sq
 
 ## 2. Acceso, sesión y estado operativo
 
-La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurable mediante `JWT_EXPIRATION` en `.env` (por defecto `7200` segundos) y clave obligatoria `JWT_SECRET`. El cierre de sesión revoca el hash SHA-256 del token actual en la tabla inmutable `auditoria`.
+La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurable mediante `JWT_EXPIRATION` (Docker y Vercel: `1800` segundos) y clave obligatoria `JWT_SECRET` (32 caracteres o más). El cierre de sesión revoca la sesión completa en la tabla inmutable `auditoria`.
+
+**Sesión por inactividad (`SEG-004`).** La sesión vence tras `JWT_EXPIRATION` segundos **sin actividad**, no desde el login: cada petición autenticada válida devuelve en la cabecera `X-Session-Token` un token renovado, que vence `JWT_EXPIRATION` segundos después de ese uso y conserva la misma sesión (claim `jti`). El cliente debe reemplazar su token por el recibido (el frontend lo hace en `frontend/includes/api.php`). Si pasan 30 minutos sin peticiones, el último token vence y la API responde `401`.
 
 ### 1. Iniciar sesión
 
@@ -106,7 +108,7 @@ La autenticación utiliza tokens JWT firmados (`HS256`) con vigencia configurabl
 | Campos | Sin cuerpo. Requiere `Authorization: Bearer <token>` |
 | Ejemplo de respuesta | `200` con `data = null` y `message = "Sesión cerrada exitosamente."` |
 | Errores esperados | `401` token ausente, inválido, expirado o sesión ya cerrada, `500` |
-| Reglas de validación | Registra el hash SHA-256 del token en `auditoria` (`accion = 'logout'`, `entidad = 'sesion'`); no invalida sesiones abiertas en otros dispositivos |
+| Reglas de validación | Registra en `auditoria` (`accion = 'logout'`, `entidad = 'sesion'`) el hash SHA-256 de la sesión (`jti`), que invalida el token enviado y todos los renovados de esa misma sesión; no invalida sesiones abiertas en otros dispositivos |
 
 ### 4. Consultar estado operativo del sistema
 

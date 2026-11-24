@@ -27,7 +27,21 @@ final class AuthMiddleware {
         }
 
         self::$currentUser = $payload;
+
+        // SEG-004: la sesión vence tras 30 min SIN ACTIVIDAD, no 30 min después del login.
+        // Cada petición válida recibe un token renovado; el cliente lo reemplaza por el anterior.
+        try {
+            $renewed = AuthHelper::renewToken($payload);
+            if ($renewed !== null && !headers_sent()) {
+                header(self::RENEWED_TOKEN_HEADER . ': ' . $renewed);
+                header('Access-Control-Expose-Headers: ' . self::RENEWED_TOKEN_HEADER);
+            }
+        } catch (\Throwable) {
+            // Si no se puede renovar, la petición sigue con el token actual.
+        }
     }
+
+    public const RENEWED_TOKEN_HEADER = 'X-Session-Token';
 
     /**
      * Devuelve el payload completo del usuario autenticado en la petición actual.

@@ -6,6 +6,16 @@
 // En Docker/servidor se define con la variable de entorno API_URL; en XAMPP local queda localhost:8000.
 define('API_URL', rtrim(getenv('API_URL') ?: 'http://localhost:8000', '/'));
 
+// SEG-004: la API devuelve un token renovado (cabecera X-Session-Token) en cada petición válida,
+// así la sesión vence tras 30 minutos SIN ACTIVIDAD y no 30 minutos después del login.
+function api_capturar_token($ch, $linea) {
+    if (stripos($linea, 'X-Session-Token:') === 0) {
+        $nuevo = trim(substr($linea, strlen('X-Session-Token:')));
+        if ($nuevo !== '' && !empty($_SESSION['token'])) $_SESSION['token'] = $nuevo;
+    }
+    return strlen($linea);
+}
+
 // Devuelve ['status' => int, 'data' => mixed, 'message' => string, 'errors' => array]
 function api($metodo, $ruta, $cuerpo = null, $conToken = true) {
     $ch = curl_init(API_URL . $ruta);
@@ -16,6 +26,7 @@ function api($metodo, $ruta, $cuerpo = null, $conToken = true) {
         CURLOPT_HTTPHEADER => $cab,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 10,
+        CURLOPT_HEADERFUNCTION => 'api_capturar_token',
     ]);
     if ($cuerpo !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($cuerpo));
     $raw = curl_exec($ch);

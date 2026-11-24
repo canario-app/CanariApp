@@ -121,7 +121,7 @@ class AuthController {
             ResponseHelper::unauthorized('Token inválido, expirado o sesión ya cerrada.');
         }
 
-        AuthHelper::revokeToken($token, (int) $payload->sub);
+        AuthHelper::revokeToken($token, (int) $payload->sub, isset($payload->jti) ? (string) $payload->jti : null);
 
         ResponseHelper::success(null, 'Sesión cerrada exitosamente.');
     }
