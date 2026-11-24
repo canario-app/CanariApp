@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/config.php';
 requerir_login();
 
 $v = ['ejemplar' => $_GET['ejemplar'] ?? '', 'nombre' => '', 'fecha' => ''];
+$v = array_merge($v, array_intersect_key(post_previo(), $v));
 $err = [];
 
 // Lista de ejemplares para el autocompletar: "2901 · SOCH · 123 · 2024"
@@ -54,6 +55,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 <form method="POST" novalidate>
   <div class="dos-col" style="grid-template-columns:1fr 360px">
     <section class="seccion" style="min-height:460px">
+      <?= flash() ?>
       <?php if ($err): ?>
         <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>No se pudo guardar el título</strong><p>Revise los campos marcados.</p></div></div>
       <?php endif; ?>

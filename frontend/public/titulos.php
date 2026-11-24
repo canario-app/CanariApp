@@ -70,7 +70,7 @@ $este_anio = count(array_filter($todos, fn($t) => substr($t['fecha'], 0, 4) === 
         <td style="max-width:180px"><?= e(variedad_txt($c['variedad'])) ?></td>
         <td style="max-width:260px"><strong><?= e($t['nombre']) ?></strong></td>
         <td><?= e(fecha($t['fecha'])) ?></td>
-        <td class="acciones" style="padding-right:16px"><a class="link" href="titulo_crias.php?id=<?= e(urlencode($t['canario'])) ?>">Ver crías <?= icono('chevron', 12) ?></a></td>
+        <td class="acciones" style="padding-right:16px"><a class="link" href="canario_ficha.php?id=<?= e(urlencode($t['canario'])) ?>#crias">Ver crías <?= icono('chevron', 12) ?></a></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$lista): ?><tr><td colspan="6" class="muted" style="padding:24px 16px">No hay títulos con estos filtros.</td></tr><?php endif; ?>

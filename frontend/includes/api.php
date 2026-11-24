@@ -65,6 +65,7 @@ function api_escribir($metodo, $ruta, $cuerpo) {
         $m = $r['message'];
         if ($r['errors']) $m .= ' ' . implode(' ', array_map('strval', $r['errors']));
         $_SESSION['flash_error'] = trim($m) ?: 'La API rechazó la operación.';
+        $_SESSION['flash_post'] = $_POST; // para volver a llenar el formulario con lo que escribió el criador
         header('Location: ' . ($_SERVER['REQUEST_URI'] ?? 'inicio.php'));
         exit;
     }

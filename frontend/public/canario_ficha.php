@@ -10,6 +10,8 @@ $url = 'canario_ficha.php?id=' . urlencode($k);
 $err = [];
 $modal_abierto = '';
 $post = $_POST;
+// Si la API rechazó el formulario, se reabre el modal con lo que había escrito
+if (!$post && ($post = post_previo())) $modal_abierto = ['solicitar' => 'm-solicitar', 'titulo' => 'm-titulo', 'marcas' => 'm-marcas'][$post['accion'] ?? ''] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     switch ($_POST['accion'] ?? '') {
@@ -49,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirigir($url, 'Título agregado', $nombre);
 
         case 'marcas':
-            $c['portadora'] = in_array($post['portadora'] ?? '', FACTORES, true) ? $post['portadora'] : '';
+            // Las marcas viven en la tabla cría: solo las crías las tienen
+            if (empty($c['id_cria'])) redirigir($url);
+            $c['portadora'] = in_array($post['portadora'] ?? '', factores_para($c['sexo']), true) ? $post['portadora'] : '';
             $c['reservada'] = !empty($post['reservada']);
             guardar_canario($c);
             redirigir($url, 'Marcas actualizadas', '');
@@ -69,6 +73,10 @@ $sus_titulos = titulos_de($k);
 $nid = $c['nidada'] ? nidada($c['nidada']) : null;
 $jaula_nac = $nid ? (pareja($nid['pareja'])['jaula'] ?? null) : null;
 $rol_otro = $c['sexo'] === 'Hembra' ? 'macho' : 'hembra';
+// Crías por pareja (SRS-RF024): una pestaña por pareja con crías
+$grupos = [];
+foreach ($sus_parejas as $pid => $p) if ($cs = crias_de_pareja($pid)) $grupos[$pid] = [$p, canario($p[$rol_otro]), $cs];
+$tab = isset($grupos[(int)($_GET['pareja'] ?? 0)]) ? (int)$_GET['pareja'] : array_key_first($grupos);
 
 $pagina = 'canarios';
 $titulo = 'Ficha ' . $c['numero'];
@@ -87,6 +95,10 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 <div class="page-head" style="align-items:flex-start">
   <div>
     <div class="anillo-grande"><?= e($c['numero']) ?> <span>· <?= e("{$c['club']} · {$c['socio']} · {$c['temp']}") ?></span></div>
+    <?php if ($sus_titulos): ?>
+      <p style="margin:6px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><?= icono('trofeo') ?> <strong>Ejemplar ganador</strong>
+        <span class="muted"><?= e(implode(' · ', array_map(fn($t) => $t['nombre'] . ' (' . fecha($t['fecha']) . ')', $sus_titulos))) ?></span></p>
+    <?php endif; ?>
     <div class="badges"><?= badges_canario($c) ?></div>
   </div>
   <div style="display:flex;gap:8px">
@@ -106,20 +118,22 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 <section class="card">
   <div class="kv">
     <div><span>Sexo</span><?= $c['sexo'] ? e($c['sexo']) : 'Pendiente' ?></div>
-    <div><span>Variedad</span><?= $c['variedad'] ? e(variedad_txt($c['variedad'])) . ' (CC)' : 'Pendiente' ?></div>
+    <div><span>Variedad</span><?= $c['variedad'] ? e(variedad_txt($c['variedad'])) . (tipo_variedad($c['variedad']) ? ' (' . e(tipo_variedad($c['variedad'])) . ')' : '') : 'Pendiente' ?></div>
     <div><span>Nacimiento</span><?= $c['nacimiento'] ? e(fecha($c['nacimiento'])) . ($jaula_nac ? ' · nidada de la jaula ' . e($jaula_nac) : '') : '—' ?></div>
     <div><span>Padre</span><?= $padre ? anillo_html($padre) : '<span class="muted">No registrado</span>' ?></div>
     <div><span>Madre</span><?= $madre ? anillo_html($madre) : '<span class="muted">No registrada</span>' ?></div>
     <div><span>Estado</span><?= ['revision' => 'Requiere revisión', 'correccion' => 'Corrección solicitada'][$c['estado']] ?? 'Sin solicitudes pendientes' ?></div>
   </div>
+  <?php if ($c['id_cria']): ?>
   <hr style="border:0;border-top:1px solid var(--gris-linea);margin:16px 0">
   <div style="display:flex;justify-content:space-between;align-items:flex-end">
     <div class="kv" style="grid-template-columns:auto auto;gap:24px">
-      <div><span>Portadora</span><?= $c['portadora'] ? 'Sí · ' . e($c['portadora']) : 'No' ?></div>
+      <div><span><?= portador_txt($c) ?></span><?= $c['portadora'] ? 'Sí · ' . e($c['portadora']) : 'No' ?></div>
       <div><span>Reservada</span><?= $c['reservada'] ? 'Sí' : 'No' ?></div>
     </div>
     <button class="btn btn-sm" data-modal="m-marcas">Editar marcas</button>
   </div>
+  <?php endif; ?>
 </section>
 
 <div class="dos-col-igual">
@@ -136,15 +150,33 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       </div>
     </section>
 
-    <section class="card">
-      <h2 style="font-size:18px;font-weight:600;display:flex;justify-content:space-between">Crías por pareja <span class="small muted" style="font-weight:400"><?= $sus_titulos ? 'Disponible porque tiene títulos' : 'Disponible cuando tenga títulos' ?></span></h2>
-      <?php if ($sus_titulos): foreach ($sus_parejas as $pid => $p): $otro = canario($p[$rol_otro]); $n = count(crias_de_pareja($pid)); ?>
-        <div class="fila-lista">
-          <span>Con <?= anillo_html($otro, true) ?></span>
-          <span style="display:flex;gap:12px;align-items:center"><span class="badge"><?= $n ? "$n crías" : 'Sin crías' ?></span><a class="link" href="titulo_crias.php?id=<?= e(urlencode($k)) ?>">Ver crías <?= icono('chevron', 12) ?></a></span>
-        </div>
-      <?php endforeach; else: ?>
-        <p class="small muted" style="margin-top:12px">Registre un título para ver las crías de este ejemplar agrupadas por pareja.</p>
+    <section class="card" id="crias">
+      <h2 style="font-size:18px;font-weight:600;display:flex;justify-content:space-between">Crías por pareja <span class="badge"><?= array_sum(array_map(fn($g) => count($g[2]), $grupos)) ?></span></h2>
+      <?php if (!$sus_titulos): ?>
+        <p class="small muted" style="margin-top:12px">Este ejemplar no tiene títulos registrados.</p>
+      <?php endif; ?>
+      <?php if (!$grupos): ?>
+        <p class="small muted" style="margin-top:12px">Este ejemplar no tiene crías registradas.</p>
+      <?php else: [$p, $otro, $cs] = $grupos[$tab]; ?>
+        <nav class="tabs" style="margin:12px 0 0">
+          <?php foreach ($grupos as $pid => [$gp, $go, $gc]): ?>
+            <a href="<?= e($url) ?>&amp;pareja=<?= $pid ?>#crias" class="<?= $pid === $tab ? 'activo' : '' ?>">Con <?= e($go['numero']) ?> <?= $rol_otro === 'hembra' ? '♀' : '♂' ?> · <?= count($gc) ?></a>
+          <?php endforeach; ?>
+        </nav>
+        <p class="xs muted" style="margin-top:8px"><?= e(anillo_txt($otro)) ?><?= $otro['variedad'] ? ' · ' . e(variedad_txt($otro['variedad'])) : '' ?> · Jaula <?= e($p['jaula']) ?><?= $p['estado'] !== 'Activa' ? ' · pareja ' . e(mb_strtolower($p['estado'])) : '' ?></p>
+        <table class="tabla" style="max-width:none">
+          <thead><tr><th>Anillo</th><th>Sexo</th><th>Variedad</th><th>Marcas y títulos</th></tr></thead>
+          <tbody>
+          <?php foreach ($cs as $ck => $cr): $nt = count(titulos_de($ck)); ?>
+            <tr>
+              <td><a href="canario_ficha.php?id=<?= e(urlencode($ck)) ?>"><?= anillo_html($cr) ?></a></td>
+              <td><?= $cr['sexo'] ? e($cr['sexo']) : '<span class="badge badge-tenue">Pendiente</span>' ?></td>
+              <td><?= $cr['variedad'] ? e($cr['variedad']) : '<span class="badge badge-tenue">Pendiente</span>' ?></td>
+              <td><?= $nt ? '<span class="badge badge-oscuro">Con título</span> ' : '' ?><?= ($cr['portadora'] || $cr['reservada'] || !$nt) ? marcas_html($cr) : '' ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
       <?php endif; ?>
     </section>
   </div>
@@ -235,16 +267,19 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 <?= modal_fin() ?>
 
 <!-- Modal: Editar marcas -->
-<?= modal_inicio('m-marcas', 'Marcas del ejemplar', 'Editar marcas', 'Ejemplar ' . e(anillo_txt($c))) ?>
+<?php if ($c['id_cria']): ?>
+<?= modal_inicio('m-marcas', 'Marcas del ejemplar', 'Editar marcas', 'Ejemplar ' . e(anillo_txt($c)), $modal_abierto === 'm-marcas') ?>
 <form method="POST" style="display:flex;flex-direction:column;gap:18px" novalidate>
   <input type="hidden" name="accion" value="marcas">
   <div class="campo">
     <label for="portadora">Portador de un factor genético</label>
-    <select class="input" id="portadora" name="portadora"><?= select_opciones(FACTORES, $c['portadora'], 'No es portador') ?></select>
+    <select class="input" id="portadora" name="portadora"><?= select_opciones(factores_para($c['sexo']), $c['portadora'], 'No es portador') ?></select>
+    <?php if ($c['sexo'] !== 'Macho' && FACTORES_LIGADOS): ?><span class="ayuda-campo">Las hembras no pueden ser portadoras de mutaciones ligadas al sexo (<?= e(implode(', ', FACTORES_LIGADOS)) ?>).</span><?php endif; ?>
   </div>
   <label class="switch"><input type="checkbox" name="reservada" value="1" <?= $c['reservada'] ? 'checked' : '' ?>><span><strong>Reservada para mi criadero</strong><br><span class="small muted">Puede quitar las marcas cuando quiera.</span></span></label>
   <div class="acciones-form"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn btn-primario">Guardar marcas</button></div>
 </form>
 <?= modal_fin() ?>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

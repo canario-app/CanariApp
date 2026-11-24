@@ -4,12 +4,15 @@ requerir_login();
 
 $anio = (int)date('Y');
 
+// Nidada ya creada cuyas crías no se guardaron todas (la API rechazó algún anillo): al reintentar se usa la misma
+$enCurso = $_SESSION['nidada_en_curso'] ?? [];
+
 // Cruces disponibles: cruces registrados de sus parejas que todavía no tienen nidada
 $cruces = [];
 foreach (parejas() as $pid => $p) {
     $usados = array_column(nidadas_de_pareja($pid), 'cruce');
     foreach ($p['cruces'] as $cf) {
-        if (in_array($cf, $usados, true)) continue;
+        if (in_array($cf, $usados, true) && !isset($enCurso["{$pid}_{$cf}"])) continue;
         $m = canario($p['macho']); $h = canario($p['hembra']);
         $cruces["{$pid}_{$cf}"] = [
             'pid' => $pid, 'fecha' => $cf, 'p' => $p, 'm' => $m, 'h' => $h,
@@ -20,7 +23,7 @@ foreach (parejas() as $pid => $p) {
 uasort($cruces, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
 
 $v = ['cruce' => $_GET['cruce'] ?? array_key_first($cruces) ?? '', 'nacimiento' => ''];
-$filas = [['numero' => '', 'club' => 'SOCH', 'socio' => '', 'temp' => (string)$anio, 'sexo' => '', 'variedad' => '']];
+$filas = [['numero' => '', 'club' => 'SOCH', 'socio' => mi_socio(), 'temp' => (string)$anio, 'sexo' => '', 'variedad' => '']];
 $err = [];
 $errFila = [];
 
@@ -44,24 +47,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $e = validar_anillo($a['numero'], $a['club'], $a['socio'], $a['temp']);
         $k = "{$a['numero']}-{$a['club']}-{$a['socio']}-{$a['temp']}";
         if (!$e && (canario($k) || isset($vistos[$k]))) $e['numero'] = 'Anillo no disponible.';
-        // La API exige sexo y variedad al registrar cada ejemplar
-        if (!in_array($a['sexo'], ['Macho', 'Hembra'], true)) $e['sexo'] = 'Elija el sexo de la cría.';
-        $cod = leer_variedad($a['variedad']);
-        if (!$cod) $e['variedad'] = 'Elija una variedad del nomenclador.';
-        elseif ($m = error_variedad_sexo($cod, $a['sexo'])) $e['variedad'] = $m;
+        // Sexo y variedad pueden quedar pendientes (SRS-RF020); si se indican, deben ser válidos
+        if ($a['sexo'] !== '' && !in_array($a['sexo'], ['Macho', 'Hembra'], true)) $e['sexo'] = 'Elija macho, hembra o déjelo pendiente.';
+        if ($a['variedad'] !== '') {
+            $cod = leer_variedad($a['variedad']);
+            if (!$cod) $e['variedad'] = 'Elija una variedad del nomenclador o déjela vacía.';
+            elseif ($m = error_variedad_sexo($cod, $a['sexo'])) $e['variedad'] = $m;
+        }
         $vistos[$k] = true;
-        if ($e) $errFila[$i] = reset($e);
+        if ($e) $errFila[$i] = $e;
     }
 
     if (!$err && !$errFila) {
-        $nid = guardar_nidada(null, ['pareja' => $cr['pid'], 'cruce' => $cr['fecha'], 'nacimiento' => $v['nacimiento']]);
+        $nid = $enCurso[$v['cruce']] ?? guardar_nidada(null, ['pareja' => $cr['pid'], 'cruce' => $cr['fecha'], 'nacimiento' => $v['nacimiento']]);
+        $_SESSION['nidada_en_curso'][$v['cruce']] = $nid;
+        $fallidas = [];
         foreach ($filas as $a) {
-            guardar_canario(['numero' => (int)$a['numero'], 'club' => $a['club'], 'socio' => (int)$a['socio'], 'temp' => (int)$a['temp'],
-                'sexo' => $a['sexo'], 'variedad' => leer_variedad($a['variedad']), 'portadora' => '', 'reservada' => false, 'estado' => '',
-                'padre' => $cr['p']['macho'], 'madre' => $cr['p']['hembra'], 'nacimiento' => $v['nacimiento'], 'nidada' => $nid]);
+            $r = api('POST', '/api/v1/crias', cuerpo_cria(['numero' => (int)$a['numero'], 'club' => $a['club'], 'socio' => (int)$a['socio'], 'temp' => (int)$a['temp'],
+                'sexo' => $a['sexo'], 'variedad' => leer_variedad($a['variedad']), 'portadora' => '', 'reservada' => false, 'nidada' => $nid]));
+            cortar_si_mantenimiento($r);
+            if ($r['status'] < 200 || $r['status'] >= 300) $fallidas[] = [$a, motivo_api($r)];
         }
-        $n = count($filas);
-        redirigir('crias.php', 'Nidada guardada', "Se registraron $n cría" . ($n > 1 ? 's' : '') . " de la pareja {$cr['m']['numero']} ♂ × {$cr['h']['numero']} ♀. Puede completar el sexo y la variedad cuando los conozca.");
+        $n = count($filas) - count($fallidas);
+        if (!$fallidas) {
+            unset($_SESSION['nidada_en_curso'][$v['cruce']]);
+            redirigir('crias.php', 'Nidada guardada', "Se registraron $n cría" . ($n > 1 ? 's' : '') . " de la pareja {$cr['m']['numero']} ♂ × {$cr['h']['numero']} ♀. Puede completar el sexo y la variedad cuando los conozca.");
+        }
+        // Se conservan solo las filas rechazadas, con el motivo de la API, para corregirlas y reintentar en la misma nidada
+        $filas = array_column($fallidas, 0);
+        $errFila = array_map(fn($f) => ['numero' => $f[1]], $fallidas);
+        $err['api'] = ($n ? "Se guardaron $n cría" . ($n > 1 ? 's' : '') . ' en la nidada. ' : 'La nidada quedó creada, pero sin crías. ')
+            . 'La API rechazó ' . (count($fallidas) > 1 ? 'los anillos marcados' : 'el anillo marcado') . '. Corrija y vuelva a guardar: se agregarán a la misma nidada.';
     }
 }
 
@@ -88,8 +104,9 @@ $temps = array_map('strval', range($anio, $anio - 3));
   </div>
 <?php else: ?>
 
+<?= flash() ?>
 <?php if ($err || $errFila): ?>
-  <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>No se pudo guardar la nidada</strong><p>Revise los campos marcados.</p></div></div>
+  <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong><?= isset($err['api']) ? 'La nidada no se guardó completa' : 'No se pudo guardar la nidada' ?></strong><p><?= e($err['api'] ?? 'Revise los campos marcados.') ?></p></div></div>
 <?php endif; ?>
 
 <form method="POST" id="formNidada" novalidate>
@@ -121,21 +138,21 @@ $temps = array_map('strval', range($anio, $anio - 3));
 
       <section class="seccion">
         <h2>2. Crías de la nidada <span class="badge" id="nCrias" style="font-weight:400"></span></h2>
-        <p class="small muted">Cada cría necesita su anillo. Indique el sexo y la variedad de cada cría.</p>
+        <p class="small muted">Cada cría necesita su anillo. El sexo y la variedad pueden quedar pendientes y completarse después.</p>
         <?= $msg('crias') ?>
         <div class="fila-cria small" style="color:var(--negro)"><span></span><span>Número de anillo</span><span>Sigla del club</span><span>N.° de socio</span><span>Temporada</span><span>Sexo</span><span>Variedad</span><span></span></div>
         <div id="filas" style="display:flex;flex-direction:column;gap:8px">
-          <?php foreach ($filas as $i => $a): ?>
+          <?php foreach (array_values($filas) as $i => $a): $ef = fn($campo) => isset($errFila[$i][$campo]) ? ' error' : ''; ?>
           <div class="fila-cria">
             <span class="n"><?= $i + 1 ?></span>
-            <input class="input<?= isset($errFila[$i]) ? ' error' : '' ?>" name="numero[]" inputmode="numeric" maxlength="6" value="<?= e($a['numero']) ?>" aria-label="Número de anillo">
-            <select class="input" name="club[]" aria-label="Sigla del club"><?= select_opciones(CLUBES, $a['club']) ?></select>
-            <input class="input" name="socio[]" inputmode="numeric" maxlength="5" value="<?= e($a['socio']) ?>" aria-label="N.° de socio">
-            <select class="input" name="temp[]" aria-label="Temporada"><?= select_opciones($temps, $a['temp']) ?></select>
-            <select class="input" name="sexo[]" aria-label="Sexo"><?= select_opciones(['Macho' => 'Macho', 'Hembra' => 'Hembra'], $a['sexo'], 'Elegir') ?></select>
-            <input class="input" name="variedad[]" list="lista-variedades" autocomplete="off" placeholder="CC033" value="<?= e($a['variedad']) ?>" aria-label="Variedad">
+            <input class="input<?= $ef('numero') ?>" name="numero[]" inputmode="numeric" maxlength="6" value="<?= e($a['numero']) ?>" aria-label="Número de anillo">
+            <select class="input<?= $ef('club') ?>" name="club[]" aria-label="Sigla del club"><?= select_opciones(CLUBES, $a['club']) ?></select>
+            <input class="input<?= $ef('socio') ?>" name="socio[]" inputmode="numeric" maxlength="5" value="<?= e($a['socio']) ?>" aria-label="N.° de socio">
+            <select class="input<?= $ef('temp') ?>" name="temp[]" aria-label="Temporada"><?= select_opciones($temps, $a['temp']) ?></select>
+            <select class="input<?= $ef('sexo') ?>" name="sexo[]" aria-label="Sexo"><?= select_opciones(['Macho' => 'Macho', 'Hembra' => 'Hembra'], $a['sexo'], 'Pendiente') ?></select>
+            <input class="input<?= $ef('variedad') ?>" name="variedad[]" list="lista-variedades" autocomplete="off" placeholder="Pendiente" value="<?= e($a['variedad']) ?>" aria-label="Variedad">
             <button type="button" class="quitar" aria-label="Quitar cría"><?= icono('cerrar', 14) ?></button>
-            <?php if (isset($errFila[$i])): ?><span class="msg-error"><?= e($errFila[$i]) ?></span><?php endif; ?>
+            <?php if (isset($errFila[$i])): ?><span class="msg-error"><?= e(implode(' ', $errFila[$i])) ?></span><?php endif; ?>
           </div>
           <?php endforeach; ?>
         </div>
@@ -166,8 +183,8 @@ $temps = array_map('strval', range($anio, $anio - 3));
     <select class="input" name="club[]" aria-label="Sigla del club"><?= select_opciones(CLUBES, 'SOCH') ?></select>
     <input class="input" name="socio[]" inputmode="numeric" maxlength="5" aria-label="N.° de socio">
     <select class="input" name="temp[]" aria-label="Temporada"><?= select_opciones($temps, (string)$anio) ?></select>
-    <select class="input" name="sexo[]" aria-label="Sexo"><?= select_opciones(['Macho' => 'Macho', 'Hembra' => 'Hembra'], '', 'Elegir') ?></select>
-    <input class="input" name="variedad[]" list="lista-variedades" autocomplete="off" placeholder="CC033" aria-label="Variedad">
+    <select class="input" name="sexo[]" aria-label="Sexo"><?= select_opciones(['Macho' => 'Macho', 'Hembra' => 'Hembra'], '', 'Pendiente') ?></select>
+    <input class="input" name="variedad[]" list="lista-variedades" autocomplete="off" placeholder="Pendiente" aria-label="Variedad">
     <button type="button" class="quitar" aria-label="Quitar cría"><?= icono('cerrar', 14) ?></button>
   </div>
 </template>

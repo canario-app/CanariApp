@@ -27,7 +27,6 @@ $secciones = $esAdmin ? [
   <div class="etapa">
     <span class="eyebrow">Etapa posterior</span>
     <span>Sugerencias de parejas</span>
-    <span>Simulación de cruces</span>
   </div>
   <?php endif; ?>
 </aside>
