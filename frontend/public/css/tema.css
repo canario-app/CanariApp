@@ -1,0 +1,218 @@
+/* CanariApp — tema de colores (paleta: Hunter Green, Sage Green, Yellow Green, Vanilla Cream, Tuscan Sun).
+   Se carga después de styles.css y responsive.css. Para volver al diseño gris, quitar este archivo del <head>. */
+:root {
+  --verde: #386641;        /* Hunter Green */
+  --verde-salvia: #6A994E; /* Sage Green */
+  --verde-claro: #A7C957;  /* Yellow Green */
+  --crema: #F2E8CF;        /* Vanilla Cream */
+  --sol: #E7BA3F;          /* Tuscan Sun */
+
+  /* Las piezas oscuras de la interfaz (botón principal, chips y páginas activas, insignias) pasan a verde */
+  --gris-oscuro: var(--verde);
+  /* Gris de texto secundario más oscuro para mantener contraste AA sobre el fondo crema */
+  --gris-texto: #5c5c5c;
+}
+
+body { background: var(--crema); }
+
+/* Barra superior verde con el logo sobre amarillo */
+.topbar { background: var(--verde); border-bottom-color: var(--verde); color: var(--blanco); }
+.marca-logo { background: var(--sol); border-color: var(--sol); }
+.marca-logo img { filter: brightness(0) invert(1); }
+.marca-criador { color: var(--crema); }
+.topbar .avatar { background: var(--sol); border-color: var(--sol); color: var(--negro); }
+.topbar .btn, .topbar .menu-btn { background: transparent; border-color: var(--crema); color: var(--blanco); }
+.topbar .btn:hover { background: var(--verde-salvia); }
+
+/* Menú lateral */
+.sidebar { border-right-color: #e2d6b5; }
+.nav a:hover { background: #e9dcb9; }
+.nav a.activo { background: var(--verde-claro); color: var(--negro); }
+
+/* Tarjetas en marfil (el blanco puro se veía frío sobre el fondo crema) */
+.card, .panel, .seccion, .stat { background: #FCF9F2; border: 1px solid #E5DBC3; box-shadow: 0 2px 6px rgba(51, 92, 56, 0.06); }
+a.card { transition: border-color .15s; }
+a.card:hover { border-color: #9BC556; }
+.modal-caja { background: var(--blanco); }
+/* Íconos de las tarjetas: se dibujan con máscara para tomar el color del texto (currentColor) */
+.icono-caja { background: #EBF2E4; color: #335C38; }
+.ico-img { width: 20px; height: 20px; background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; } /* la imagen va en el style del elemento: así la ruta se resuelve desde la página */
+.panel-gris { background: #faf5e8; border-color: #e2d6b5; }
+.btn { background: var(--blanco); }
+.btn-primario { background: var(--verde); border-color: var(--verde); color: var(--blanco); }
+.btn-primario:hover { background: var(--verde-salvia); border-color: var(--verde-salvia); }
+.btn:disabled { background: var(--gris-borde); border-color: var(--gris-borde); color: #6b6b6b; }
+.tabs a.activo { color: var(--verde); border-color: var(--verde); }
+.input:focus { border-color: var(--verde); outline: 2px solid var(--verde-claro); outline-offset: 0; }
+.aviso-warn { border-color: var(--sol); }
+
+/* ---------- Inicio de sesión y contacto (como la maqueta) ---------- */
+.login-top { height: 72px; background: var(--verde); color: var(--blanco); display: flex; align-items: center; gap: 14px; padding: 0 clamp(16px, 4vw, 32px); }
+.login-top .marca-logo { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.login-top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
+.login-top p { font-size: 14px; color: var(--crema); }
+.login-top .tema-toggle { margin-inline-start: auto; flex-shrink: 0; }
+.login-bg { min-height: calc(100vh - 72px); align-items: flex-start; padding-top: 48px; }
+.login { background: var(--verde-salvia); border: 0; border-radius: 4px; color: var(--blanco); }
+.login label { color: var(--blanco); font-weight: 600; font-size: 14px; }
+.login .desc, .login .ayuda-login { color: var(--crema); }
+.login .ayuda-login a { color: var(--blanco); }
+.login .input { border-radius: 999px; border-color: var(--blanco); background: var(--blanco); color: var(--negro); }
+.login .btn { border-radius: 999px; }
+.login .btn-primario { background: var(--verde); border-color: var(--verde); }
+.login .btn-primario:hover { background: #2d5234; border-color: #2d5234; }
+.login .btn:disabled { background: #4f7a3a; border-color: #4f7a3a; color: var(--crema); }
+.login hr { border-top-color: rgba(255,255,255,.35); }
+/* Mensajes de error dentro de la tarjeta verde: blanco sobre rojo para que se lean */
+.login .msg-error { background: var(--rojo); color: var(--blanco); padding: 4px 10px; border-radius: 6px; }
+.login .aviso, .login .aviso p { color: var(--negro); }
+.login .aviso-error, .login .aviso-error p { color: var(--rojo); }
+.login-form .aviso-warn { background: var(--crema); color: var(--verde); }
+.login .muted { color: var(--crema); }
+.login .btn-volver { color: var(--negro); text-align: center; white-space: normal; }
+
+.login-bg-ilustrado {
+  min-height: calc(100svh - 72px);
+  align-items: center;
+  padding: 32px 24px;
+}
+.login-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  width: min(100%, 1000px);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(33, 48, 24, .25);
+}
+.login-presentacion {
+  position: relative;
+  min-height: 380px;
+  background: #5c7c3d;
+  color: var(--blanco);
+}
+.login-presentacion-texto {
+  position: relative;
+  z-index: 1;
+  width: 39%;
+  margin-left: auto;
+  padding: 36px 24px 20px 0;
+}
+.login-presentacion h1 { font-size: 32px; line-height: 1.1; letter-spacing: -.6px; }
+.login-presentacion p { margin-top: 8px; line-height: 1.35; }
+.login-canarios { position: absolute; inset: auto 0 0; display: block; }
+.login-canarios img { width: 100%; height: auto; }
+.login-form {
+  width: auto;
+  max-width: none;
+  justify-content: center;
+  padding: 32px clamp(20px, 2.5vw, 32px);
+  gap: 20px;
+  border-radius: 0;
+  background: #496c36;
+}
+.login-form .input::placeholder { color: var(--gris-texto); }
+.login-form .input-icono.der .input { padding-right: 36px; }
+.login-form .btn:disabled { background: #36512a; border-color: #36512a; }
+
+@media (max-width: 760px) {
+  .login-bg-ilustrado { align-items: flex-start; padding: 24px 14px; }
+  .login-panel { grid-template-columns: minmax(0, 1fr); max-width: 440px; }
+  .login-presentacion { min-height: 0; }
+  .login-presentacion-texto { width: auto; margin: 0; padding: 24px 24px 12px; }
+  .login-presentacion h1 { font-size: 28px; }
+  .login-canarios { position: static; }
+  .login-form { padding: 24px 20px; gap: 18px; }
+}
+
+/* ---------- Selector de tema (Sol / Luna) en la barra superior ---------- */
+.tema-toggle { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid rgba(242, 232, 207, .55); border-radius: 999px; }
+.tema-toggle button { width: 34px; height: 30px; border: 0; border-radius: 999px; background: transparent; color: var(--crema); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; }
+.tema-toggle .tema-icono-sol-movil { display: none; }
+.tema-toggle button:hover { background: rgba(255, 255, 255, .12); }
+.tema-toggle button[aria-pressed="true"] { background: var(--crema); color: var(--verde); }
+.tema-toggle button:focus-visible { outline: 2px solid var(--sol); outline-offset: 2px; }
+
+/* ==========================================================================
+   MODO OSCURO: neutro con acento amarillo suave. Se activa con <html data-tema="oscuro">.
+   Redefine las variables base, así los componentes de styles.css cambian solos.
+   Regla de contraste: sobre el amarillo #FFF59D el texto y los íconos van en #212121.
+   ========================================================================== */
+[data-tema="oscuro"] {
+  --acento: #FFF59D;
+  --negro: #FFFFFF;            /* texto principal */
+  --gris-texto: #9E9E9E;       /* texto secundario */
+  --gris-placeholder: #7A7A7A;
+  --blanco: #363636;           /* superficies: tarjetas, barras, modales, campos */
+  --gris-fondo: #2B2B2B;       /* fondos secundarios: insignias, avisos, filas de tabla */
+  --gris-borde: #484848;
+  --gris-linea: #484848;
+  --gris-oscuro: var(--acento); /* botón principal, chips y páginas activas, insignias destacadas */
+  --rojo: #FF8A80; --rojo-borde: #E57373; --rojo-fondo: #3A2424;
+  color-scheme: dark;
+}
+[data-tema="oscuro"] body { background: #212121; }
+[data-tema="oscuro"] .topbar { background: #363636; border-bottom-color: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .marca-criador { color: #9E9E9E; }
+[data-tema="oscuro"] .marca-logo, [data-tema="oscuro"] .topbar .avatar { background: var(--acento); border-color: var(--acento); color: #212121; }
+[data-tema="oscuro"] .marca-logo img { filter: none; }
+[data-tema="oscuro"] .topbar .btn, [data-tema="oscuro"] .topbar .menu-btn { border-color: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .topbar .btn:hover { background: #484848; }
+[data-tema="oscuro"] .sidebar { background: #363636; border-right-color: #484848; }
+[data-tema="oscuro"] .nav a { color: #9E9E9E; }
+[data-tema="oscuro"] .nav a:hover { background: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .nav a.activo { background: var(--acento); color: #212121; }
+[data-tema="oscuro"] .card, [data-tema="oscuro"] .panel, [data-tema="oscuro"] .seccion, [data-tema="oscuro"] .stat { background: #363636; border-color: #484848; box-shadow: none; }
+[data-tema="oscuro"] a.card:hover { border-color: var(--acento); }
+[data-tema="oscuro"] .icono-caja { background: #2B2B2B; color: var(--acento); }
+[data-tema="oscuro"] .panel-gris, [data-tema="oscuro"] .ayuda { background: #2B2B2B; border-color: #484848; }
+[data-tema="oscuro"] .btn { background: #363636; color: #FFFFFF; }
+[data-tema="oscuro"] .btn-primario, [data-tema="oscuro"] .chip.activo, [data-tema="oscuro"] .badge-oscuro,
+[data-tema="oscuro"] .paginas a.activo, [data-tema="oscuro"] .aviso-oscuro, [data-tema="oscuro"] .paso .num { background: var(--acento); border-color: var(--acento); color: #212121; }
+[data-tema="oscuro"] .btn-primario:hover { background: #FFF176; border-color: #FFF176; }
+[data-tema="oscuro"] .btn-primario img { filter: brightness(0); opacity: .87; }  /* flecha.svg es clara: se oscurece sobre el amarillo */
+[data-tema="oscuro"] .aviso-oscuro .btn { background: #212121; color: #FFFFFF; }
+[data-tema="oscuro"] .btn:disabled { background: #2B2B2B; border-color: #484848; color: #7A7A7A; }
+[data-tema="oscuro"] .tabs a.activo { color: var(--acento); border-color: var(--acento); }
+[data-tema="oscuro"] .input:focus { border-color: var(--acento); outline-color: rgba(255, 245, 157, .35); }
+[data-tema="oscuro"] select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239e9e9e' stroke-width='1.6'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E"); }
+[data-tema="oscuro"] .modal { background: rgba(0, 0, 0, .7); }
+[data-tema="oscuro"] .aviso-warn { border-color: var(--acento); }
+[data-tema="oscuro"] img[src$="ojo.svg"], [data-tema="oscuro"] .btn:not(.btn-primario) img { filter: invert(1); }
+/* Selector de tema en oscuro: la opción activa en amarillo con ícono oscuro */
+[data-tema="oscuro"] .tema-toggle { border-color: #484848; }
+[data-tema="oscuro"] .tema-toggle button { color: #9E9E9E; }
+[data-tema="oscuro"] .tema-toggle button[aria-pressed="true"] { background: var(--acento); color: #212121; }
+/* Inicio de sesión y contacto en oscuro */
+[data-tema="oscuro"] .login-top { background: #363636; border-bottom: 1px solid #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .login-top p { color: #9E9E9E; }
+[data-tema="oscuro"] .login { background: #363636; border: 1px solid #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .login label { color: #FFFFFF; }
+[data-tema="oscuro"] .login .desc, [data-tema="oscuro"] .login .ayuda-login, [data-tema="oscuro"] .login .muted { color: #9E9E9E; }
+[data-tema="oscuro"] .login .ayuda-login a { color: var(--acento); }
+[data-tema="oscuro"] .login .input { background: #212121; border-color: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .login .btn-primario { background: var(--acento); border-color: var(--acento); color: #212121; }
+[data-tema="oscuro"] .login .btn:disabled { background: #2B2B2B; border-color: #484848; color: #7A7A7A; }
+[data-tema="oscuro"] .login .aviso, [data-tema="oscuro"] .login .aviso p { color: #FFFFFF; }
+[data-tema="oscuro"] .login .aviso-error, [data-tema="oscuro"] .login .aviso-error p { color: var(--rojo); }
+[data-tema="oscuro"] .login-form .aviso-warn { background: var(--gris-fondo); color: var(--acento); }
+[data-tema="oscuro"] .login .msg-error { background: #B71C1C; color: #FFFFFF; }
+[data-tema="oscuro"] .login-presentacion { background: #2B2B2B; color: var(--negro); }
+[data-tema="oscuro"] .login-form { border: 0; }
+
+/* ---------- Ilustración del inicio: dos canarios en una rama ----------
+   Silueta con fondo transparente usada como máscara: toma el color del tema (verde en claro, amarillo en oscuro). */
+.hero-inicio { position: relative; }
+.hero-inicio > :not(.hero-aves) { position: relative; z-index: 1; }
+.hero-aves {
+  position: absolute; z-index: 0; pointer-events: none;
+  right: -48px; top: calc(50% + 16px); transform: translateY(-50%);
+  width: min(62%, 980px); aspect-ratio: 1400 / 298;
+  background: var(--verde-salvia);
+  -webkit-mask: url(../img/canarios-rama.png) center / contain no-repeat;
+  mask: url(../img/canarios-rama.png) center / contain no-repeat;
+}
+[data-tema="oscuro"] .hero-aves { background: var(--acento); opacity: .8; }
+/* En pantallas angostas el dibujo taparía el saludo: se muestra encima del texto, sin superponerse */
+@media (max-width: 1100px) {
+  .hero-aves { position: static; display: block; transform: none; width: 100%; max-width: 640px; margin: 0 0 16px auto; }
+}
