@@ -2,7 +2,8 @@
 require_once __DIR__ . '/../includes/config.php';
 requerir_login();
 
-$v = ['macho' => $_GET['macho'] ?? '', 'hembra' => '', 'jaula' => ''];
+$v = ['macho' => $_GET['macho'] ?? '', 'hembra' => '', 'jaula' => '', 'desde' => hoy()];
+$v = array_merge($v, array_intersect_key(post_previo(), $v));
 $err = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -11,16 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $h = canario($v['hembra']);
 
     if (!$m || $m['sexo'] !== 'Macho') $err['macho'] = 'Elija un macho de su criadero.';
-    elseif (count(parejas_activas_de($v['macho'])) >= MAX_PAREJAS_MACHO) $err['macho'] = 'Este macho ya tiene ' . MAX_PAREJAS_MACHO . ' parejas activas. El máximo es ' . MAX_PAREJAS_MACHO . '.';
 
     if (!$h || $h['sexo'] !== 'Hembra') $err['hembra'] = 'Elija una hembra de su criadero.';
     elseif ($act = parejas_activas_de($v['hembra'])) $err['hembra'] = 'Esta hembra ya tiene una pareja activa (jaula ' . current($act)['jaula'] . ').';
 
-    if (!preg_match('/^\d{1,3}$/', $v['jaula']) || (int)$v['jaula'] < 1) $err['jaula'] = 'Ingrese un número de jaula válido.';
+    // SRS-RF012: cualquier entero de 1 a 2.147.483.647
+    if (!preg_match('/^\d{1,10}$/', $v['jaula']) || (int)$v['jaula'] < 1 || (int)$v['jaula'] > 2147483647) $err['jaula'] = 'Ingrese un número de jaula entre 1 y 2.147.483.647.';
     elseif (in_array((int)$v['jaula'], jaulas_ocupadas(), true)) $err['jaula'] = "La jaula {$v['jaula']} ya tiene una pareja activa.";
 
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $v['desde'])) $err['desde'] = 'Ingrese la fecha de formación.';
+    elseif ($v['desde'] > hoy()) $err['desde'] = 'La fecha no puede ser posterior a hoy.';
+
     if (!$err) {
-        $id = guardar_pareja(null, ['jaula' => (int)$v['jaula'], 'macho' => $v['macho'], 'hembra' => $v['hembra'], 'estado' => 'Activa', 'desde' => hoy(), 'cruces' => []]);
+        $id = guardar_pareja(null, ['jaula' => (int)$v['jaula'], 'macho' => $v['macho'], 'hembra' => $v['hembra'], 'estado' => 'Activa', 'desde' => $v['desde'], 'cruces' => []]);
         redirigir("jaula.php?id=$id", 'Pareja registrada', "Se formó la pareja {$m['numero']} ♂ × {$h['numero']} ♀ en la jaula {$v['jaula']}. Registre la fecha de cruce cuando ocurra.");
     }
 }
@@ -47,6 +51,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
   <p class="bajada">Elija un macho y una hembra de su criadero y asígneles una jaula libre.</p>
 </div>
 
+<?= flash() ?>
 <?php if ($err): ?>
   <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>No se pudo registrar la pareja</strong><p>Revise los campos marcados.</p></div></div>
 <?php endif; ?>
@@ -71,6 +76,11 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
           <input class="input" id="jaula" name="jaula" inputmode="numeric" placeholder="Ej.: 5" value="<?= e($v['jaula']) ?>">
           <?= $msg('jaula') ?>
         </div>
+        <div class="campo<?= isset($err['desde']) ? ' error' : '' ?>">
+          <label for="desde">Fecha de formación</label>
+          <input class="input" type="date" id="desde" name="desde" max="<?= hoy() ?>" value="<?= e($v['desde']) ?>">
+          <?= $msg('desde') ?: '<span class="ayuda-campo">Por defecto, hoy. Puede indicar una fecha anterior de la temporada.</span>' ?>
+        </div>
       </div>
       <p class="small muted" style="margin-top:auto;display:flex;gap:8px"><?= icono('info') ?> La fecha de cruce se registra después, desde la pareja.</p>
     </section>
@@ -79,7 +89,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <h3>Reglas para formar una pareja</h3>
       <ul class="reglas">
         <li><?= icono('check') ?> Un macho y una hembra, ambos con sexo registrado.</li>
-        <li><?= icono('check') ?> Un macho puede tener hasta <?= MAX_PAREJAS_MACHO ?> parejas activas.</li>
+        <li><?= icono('check') ?> Un macho puede tener varias parejas activas, sin límite.</li>
         <li><?= icono('check') ?> Una hembra solo puede tener una pareja activa.</li>
         <li><?= icono('check') ?> Cada jaula admite una sola pareja activa.</li>
       </ul>
@@ -94,9 +104,9 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 
 <script>
   // Muestra cuántas parejas activas tiene el macho elegido
-  const activas = <?= json_encode($activasMacho) ?>, max = <?= MAX_PAREJAS_MACHO ?>;
+  const activas = <?= json_encode($activasMacho) ?>;
   const sel = document.getElementById('macho'), ayuda = document.getElementById('ayudaMacho');
-  const upd = () => { if (!ayuda) return; const n = activas[sel.value]; ayuda.textContent = sel.value ? `${n} de ${max} parejas activas · puede formar ${max - n} más` : ''; };
+  const upd = () => { if (!ayuda) return; const n = activas[sel.value]; ayuda.textContent = sel.value ? `${n} pareja${n === 1 ? '' : 's'} activa${n === 1 ? '' : 's'}` : ''; };
   sel.addEventListener('change', upd); upd();
 </script>
 

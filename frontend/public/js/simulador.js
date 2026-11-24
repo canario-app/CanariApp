@@ -29,7 +29,9 @@ const actualizarHerencia = () => {
   $('herencia').textContent = o.dataset.herencia;
   // En herencia ligada al sexo la hembra no puede ser portadora (DAT-006)
   const hp = document.querySelector('input[name="gen_hembra"][value="portador"]');
+  // se quita la opción (no solo se desactiva); vuelve a aparecer con las mutaciones autosómicas
   hp.disabled = o.dataset.ligada === '1';
+  hp.closest('label').style.display = hp.disabled ? 'none' : ''; // .radio define display, así que [hidden] no basta
   if (hp.disabled && hp.checked) hp.checked = false;
 };
 $('mutacion').addEventListener('change', actualizarHerencia);

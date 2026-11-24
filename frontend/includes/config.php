@@ -41,6 +41,13 @@ function redirigir($url, $titulo = null, $texto = '') {
     exit;
 }
 
+// Lo que el criador había enviado cuando la API rechazó el formulario (una sola vez)
+function post_previo() {
+    $p = $_SESSION['flash_post'] ?? [];
+    unset($_SESSION['flash_post']);
+    return $p;
+}
+
 function flash() {
     $err = $_SESSION['flash_error'] ?? null;
     unset($_SESSION['flash_error']);

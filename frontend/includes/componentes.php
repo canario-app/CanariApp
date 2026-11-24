@@ -14,6 +14,15 @@ function leer_variedad($txt) {
     return isset(VARIEDADES[$cod]) ? $cod : null;
 }
 
+// Factores que puede portar según el sexo: la hembra no porta mutaciones ligadas al sexo
+function factores_para($sexo) {
+    return $sexo === 'Macho' ? FACTORES : array_values(array_diff(FACTORES, FACTORES_LIGADOS));
+}
+// «Portador», «Portadora» o «Portador/a» si el sexo aún está pendiente
+function portador_txt($c) {
+    return ['Macho' => 'Portador', 'Hembra' => 'Portadora'][$c['sexo']] ?? 'Portador/a';
+}
+
 // Valida que la variedad sea compatible con el sexo; devuelve mensaje o null
 function error_variedad_sexo($cod, $sexo) {
     $req = VARIEDADES[$cod]['sexo'] ?? null;
@@ -37,7 +46,7 @@ function badges_canario($c, $conTitulos = true) {
     $h = '';
     if ($c['sexo']) $h .= '<span class="badge">' . e($c['sexo']) . '</span>';
     if ($c['variedad']) $h .= '<span class="badge">' . e(variedad_txt($c['variedad'])) . '</span>';
-    if ($c['portadora']) $h .= '<span class="badge badge-borde">Portadora · ' . e($c['portadora']) . '</span>';
+    if ($c['portadora']) $h .= '<span class="badge badge-borde">' . portador_txt($c) . ' · ' . e($c['portadora']) . '</span>';
     if ($c['reservada']) $h .= '<span class="badge">Reservada</span>';
     $n = count(titulos_de(clave($c)));
     if ($conTitulos && $n) $h .= '<span class="badge badge-oscuro">Con ' . $n . ' título' . ($n > 1 ? 's' : '') . '</span>';
@@ -46,7 +55,7 @@ function badges_canario($c, $conTitulos = true) {
 
 function marcas_html($c) {
     $h = [];
-    if ($c['portadora']) $h[] = '<span class="badge badge-borde">Portadora · ' . e($c['portadora']) . '</span>';
+    if ($c['portadora']) $h[] = '<span class="badge badge-borde">' . portador_txt($c) . ' · ' . e($c['portadora']) . '</span>';
     if ($c['reservada']) $h[] = '<span class="badge">Reservada</span>';
     return $h ? implode(' ', $h) : '<span class="muted">—</span>';
 }

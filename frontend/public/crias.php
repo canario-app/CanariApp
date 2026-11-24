@@ -12,7 +12,7 @@ $f = [
 $qs = fn($extra = []) => 'crias.php?' . http_build_query(array_merge(array_filter($f, fn($x) => $x !== '' && $x !== 'todas'), $extra));
 
 $err = [];
-$post = $_POST;
+$post = $_POST ?: post_previo();
 $completar = $_GET['completar'] ?? '';
 $agregar = (int)($_GET['agregar'] ?? 0);
 
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$err) {
             $c['sexo'] = $sexo;
             $c['variedad'] = $cod ?: '';
-            $c['portadora'] = in_array($post['portadora'] ?? '', FACTORES, true) ? $post['portadora'] : '';
+            $c['portadora'] = in_array($post['portadora'] ?? '', factores_para($sexo), true) ? $post['portadora'] : '';
             $c['reservada'] = !empty($post['reservada']);
             guardar_canario($c);
             redirigir($qs(), 'Datos guardados', 'Se actualizó la cría ' . anillo_txt($c) . '.');
@@ -43,11 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $a = ['numero' => trim($post['numero'] ?? ''), 'club' => $post['club'] ?? '', 'socio' => trim($post['socio'] ?? ''), 'temp' => $post['temp'] ?? ''];
         $err = validar_anillo($a['numero'], $a['club'], $a['socio'], $a['temp']);
         if (!$err && canario("{$a['numero']}-{$a['club']}-{$a['socio']}-{$a['temp']}")) $err['numero'] = 'Anillo no disponible.';
+        // Sexo y variedad pueden quedar pendientes (SRS-RF020)
         $sx = $post['sexo'] ?? '';
-        if (!in_array($sx, ['Macho', 'Hembra'], true)) $err['sexo'] = 'Elija el sexo de la cría.';
-        $cod = leer_variedad($post['variedad'] ?? '');
-        if (!$cod) $err['variedad'] = 'Elija una variedad del nomenclador.';
-        elseif ($m = error_variedad_sexo($cod, $sx)) $err['variedad'] = $m;
+        if (!in_array($sx, ['Macho', 'Hembra', ''], true)) $err['sexo'] = 'Elija macho, hembra o déjelo pendiente.';
+        $cod = '';
+        if (trim($post['variedad'] ?? '') !== '') {
+            $cod = leer_variedad($post['variedad']);
+            if (!$cod) $err['variedad'] = 'Elija una variedad del nomenclador o déjela vacía.';
+            elseif ($m = error_variedad_sexo($cod, $sx)) $err['variedad'] = $m;
+        }
         if (!$err) {
             $p = pareja($n['pareja']);
             $nueva = ['numero' => (int)$a['numero'], 'club' => $a['club'], 'socio' => (int)$a['socio'], 'temp' => (int)$a['temp'],
@@ -227,7 +231,8 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
     <div class="seccion" style="padding:16px">
       <div class="campo">
         <label for="portadora"><strong>Portador de un factor genético</strong></label>
-        <select class="input" id="portadora" name="portadora"><?= select_opciones(FACTORES, $post['portadora'] ?? $c['portadora'], 'No es portador') ?></select>
+        <select class="input" id="portadora" name="portadora"><?= select_opciones(factores_para($c['sexo']), $post['portadora'] ?? $c['portadora'], 'No es portador') ?></select>
+        <?php if ($c['sexo'] !== 'Macho' && FACTORES_LIGADOS): ?><span class="ayuda-campo">Las hembras no pueden ser portadoras de mutaciones ligadas al sexo (<?= e(implode(', ', FACTORES_LIGADOS)) ?>).</span><?php endif; ?>
       </div>
       <label class="switch"><input type="checkbox" name="reservada" value="1" <?= ($post ? !empty($post['reservada']) : $c['reservada']) ? 'checked' : '' ?>><span><strong>Reservada para mi criadero</strong><br><span class="small muted">Puede quitar las marcas cuando quiera.</span></span></label>
     </div>
@@ -255,7 +260,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <div class="campo"><label for="temp">Temporada</label><select class="input" id="temp" name="temp"><?= select_opciones(array_map('strval', range($anio, $anio - 3)), $post['temp'] ?? substr($n['nacimiento'], 0, 4)) ?></select></div>
     </div>
     <div class="campo<?= isset($err['sexo']) ? ' error' : '' ?>"><label>Sexo</label>
-      <div class="radios-sexo"><?php foreach (['Macho', 'Hembra'] as $s): ?><label class="radio"><input type="radio" name="sexo" value="<?= $s ?>" <?= ($post['sexo'] ?? '') === $s ? 'checked' : '' ?>> <?= $s ?></label><?php endforeach; ?></div>
+      <div class="radios-sexo"><?php foreach (['Macho' => 'Macho', 'Hembra' => 'Hembra', '' => 'Pendiente'] as $s => $txt): ?><label class="radio"><input type="radio" name="sexo" value="<?= $s ?>" <?= ($post['sexo'] ?? '') === $s ? 'checked' : '' ?>> <?= $txt ?></label><?php endforeach; ?></div>
       <?= $msg('sexo') ?></div>
     <div class="campo<?= isset($err['variedad']) ? ' error' : '' ?>"><label for="variedad_n">Variedad del nomenclador</label>
       <input class="input" id="variedad_n" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Escriba el código, ej.: CC033" value="<?= e($post['variedad'] ?? '') ?>">

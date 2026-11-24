@@ -3,7 +3,8 @@ require_once __DIR__ . '/../includes/config.php';
 requerir_login();
 
 $anio = (int)date('Y');
-$v = ['numero' => $_GET['numero'] ?? '', 'club' => 'SOCH', 'socio' => '', 'temp' => (string)$anio, 'sexo' => '', 'variedad' => ''];
+$v = ['numero' => $_GET['numero'] ?? '', 'club' => 'SOCH', 'socio' => mi_socio(), 'temp' => (string)$anio, 'sexo' => '', 'variedad' => ''];
+$v = array_merge($v, array_intersect_key(post_previo(), $v));
 $err = [];
 $duplicado = false;
 
@@ -51,6 +52,7 @@ $msg = fn($campo, $ayuda = '') => isset($err[$campo]) ? '<span class="msg-error"
 
 <div class="dos-col">
   <form method="POST" style="display:flex;flex-direction:column;gap:20px" id="formEjemplar" novalidate>
+    <?= flash() ?>
     <?php if ($duplicado): ?>
       <div class="aviso aviso-error"><?= icono('alerta') ?><div><strong>Anillo no disponible</strong><p>Esa combinación de número de anillo, club, socio y temporada ya está registrada. Revise los datos del anillo.</p></div></div>
     <?php elseif ($err): ?>

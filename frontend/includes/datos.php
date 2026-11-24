@@ -7,7 +7,7 @@
  */
 require_once __DIR__ . '/api.php';
 
-const MAX_PAREJAS_MACHO = 6;
+// CR-002: un macho puede tener cualquier cantidad de parejas activas (cada hembra, solo una).
 
 // ---------- Catálogos (club, variedad, mutación) ----------
 // Se piden una vez por sesión y se definen como constantes, igual que antes.
@@ -19,9 +19,11 @@ function cargar_catalogo() {
 $_cat = cargar_catalogo();
 define('CLUBES', array_column($_cat['clubes'], 'sigla'));
 define('FACTORES', array_column($_cat['mutaciones'], 'nombre'));
+// Mutaciones ligadas al sexo: la hembra no puede ser portadora (SRS-RF021)
+define('FACTORES_LIGADOS', array_column(array_filter($_cat['mutaciones'], fn($m) => str_contains($m['tipo_herencia'] ?? '', 'ligada')), 'nombre'));
 $_vars = [];
 foreach ($_cat['variedades'] as $_v) {
-    $_vars[$_v['codigo']] = ['nombre' => $_v['nombre'], 'sexo' => ['M' => 'Macho', 'H' => 'Hembra'][$_v['sexo'] ?? ''] ?? null];
+    $_vars[$_v['codigo']] = ['nombre' => $_v['nombre'], 'tipo' => $_v['tipo'] ?? '', 'sexo' => ['M' => 'Macho', 'H' => 'Hembra'][$_v['sexo'] ?? ''] ?? null];
 }
 define('VARIEDADES', $_vars);
 unset($_cat, $_vars, $_v);
@@ -130,11 +132,14 @@ function guardar_canario($c, $claveAnterior = null) {
     else unset($_SESSION['correcciones_pendientes'][$k]);
 
     if (!empty($c['id'])) {
-        $cuerpo = ['anillo' => (string)$c['numero'], 'id_club' => id_club($c['club']), 'numero_socio' => (string)$c['socio'], 'temporada' => (int)$c['temp']];
-        if ($sexo) $cuerpo['sexo'] = $sexo;
-        if ($idVar) $cuerpo['id_variedad'] = $idVar;
-        api_escribir('PATCH', '/api/v1/canarios/' . $c['id'], $cuerpo);
-        if (!empty($c['id_cria'])) {
+        // Solo se envía lo que cambió: la API rechaza reenviar el anillo o el sexo ya asignado fuera del Modo de Corrección
+        $antes = canario($k) ?? [];
+        $cuerpo = [];
+        if ($sexo && $c['sexo'] !== ($antes['sexo'] ?? '')) $cuerpo['sexo'] = $sexo;
+        if ($idVar && $c['variedad'] !== ($antes['variedad'] ?? '')) $cuerpo['id_variedad'] = $idVar;
+        if ($cuerpo) api_escribir('PATCH', '/api/v1/canarios/' . $c['id'], $cuerpo);
+        $marcasCambian = $c['portadora'] !== ($antes['portadora'] ?? '') || $c['reservada'] !== ($antes['reservada'] ?? false);
+        if (!empty($c['id_cria']) && $marcasCambian) {
             api_escribir('PATCH', '/api/v1/crias/' . $c['id_cria'], [
                 'reservada' => (bool)$c['reservada'],
                 'factor_genetico' => $c['portadora'] ? id_mutacion($c['portadora']) : null,
@@ -143,21 +148,32 @@ function guardar_canario($c, $claveAnterior = null) {
         return;
     }
 
-    $nuevo = api_escribir('POST', '/api/v1/canarios', [
+    if (!empty($c['nidada'])) {
+        api_escribir('POST', '/api/v1/crias', cuerpo_cria($c));
+        return;
+    }
+    api_escribir('POST', '/api/v1/canarios', [
         'anillo' => (string)$c['numero'], 'id_club' => id_club($c['club']), 'numero_socio' => (string)$c['socio'],
         'temporada' => (int)$c['temp'], 'sexo' => $sexo, 'id_variedad' => $idVar,
     ]);
-    if (!empty($c['nidada'])) {
-        api_escribir('POST', '/api/v1/crias', [
-            'id_nidada' => (int)$c['nidada'], 'id_canario' => $nuevo['id_canario'],
-            'factor_genetico' => $c['portadora'] ? id_mutacion($c['portadora']) : null, 'reservada' => (bool)$c['reservada'],
-        ]);
-    }
 }
+// Cría nueva con su anillo en una sola llamada; sexo y variedad pueden quedar pendientes (SRS-RF020)
+function cuerpo_cria($c) {
+    return [
+        'id_nidada' => (int)$c['nidada'],
+        'canario' => [
+            'anillo' => (string)$c['numero'], 'id_club' => id_club($c['club']), 'numero_socio' => (string)$c['socio'], 'temporada' => (int)$c['temp'],
+            'sexo' => ['Macho' => 'M', 'Hembra' => 'H'][$c['sexo']] ?? null, 'id_variedad' => $c['variedad'] ? id_variedad($c['variedad']) : null,
+        ],
+        'factor_genetico' => $c['portadora'] ? id_mutacion($c['portadora']) : null, 'reservada' => (bool)$c['reservada'],
+    ];
+}
+// Tipo del nomenclador: CC (color) o CP (forma y postura)
+function tipo_variedad($cod) { return VARIEDADES[$cod]['tipo'] ?? ''; }
 function por_sexo($sexo) {
     return array_filter(canarios(), fn($c) => $c['sexo'] === $sexo);
 }
-// La API exige sexo y variedad al registrar, así que solo quedarían pendientes datos sin completar
+// Crías registradas con sexo o variedad pendientes (SRS-RF020)
 function es_pendiente($c) { return $c['sexo'] === '' || $c['variedad'] === ''; }
 
 // ---------- Parejas ----------
@@ -171,7 +187,7 @@ function guardar_pareja($id, $p) {
         $idJaula = $db['jaulas'][$p['jaula']] ?? null;
         if (!$idJaula) $idJaula = api_escribir('POST', '/api/v1/jaulas', ['numero_jaula' => (int)$p['jaula']])['id_jaula'];
         $m = canario($p['macho']); $h = canario($p['hembra']);
-        return api_escribir('POST', '/api/v1/parejas', ['id_macho' => $m['id'], 'id_hembra' => $h['id'], 'id_jaula' => $idJaula])['id_pareja'];
+        return api_escribir('POST', '/api/v1/parejas', ['id_macho' => $m['id'], 'id_hembra' => $h['id'], 'id_jaula' => $idJaula, 'fecha_formacion' => $p['desde'] ?? hoy()])['id_pareja'];
     }
     $antes = $db['parejas'][$id];
     if ($antes['macho'] !== $p['macho'] || $antes['hembra'] !== $p['hembra']) {
@@ -186,6 +202,23 @@ function guardar_pareja($id, $p) {
         api_escribir('PATCH', '/api/v1/parejas/' . $id, ['estado' => mb_strtolower($p['estado']), 'fecha_fin' => $p['fin'] ?? hoy()]);
     }
     return $id;
+}
+// Modo de Corrección (SRS-RF030/031). Devuelven la respuesta de la API para que la pantalla muestre el motivo si la rechaza.
+// $destino: 'anular' o la clave del verdadero progenitor; $rol: 'macho' | 'hembra'
+function corregir_pareja($pid, $rol, $destino, $motivo) {
+    if ($destino === 'anular') return api('PATCH', "/api/v1/parejas/$pid", ['estado' => 'anulada', 'fecha_fin' => hoy(), 'motivo' => $motivo]);
+    return api('PATCH', "/api/v1/parejas/$pid", ['modo_correccion' => true, 'motivo' => $motivo, "id_$rol" => canario($destino)['id']]);
+}
+function corregir_canario($c, $sexo, $cod, $motivo, $clave) {
+    $cuerpo = ['modo_correccion' => true, 'motivo' => $motivo, 'password' => $clave];
+    if ($sexo !== $c['sexo']) $cuerpo['sexo'] = ['Macho' => 'M', 'Hembra' => 'H'][$sexo];
+    if ($cod !== $c['variedad']) $cuerpo['id_variedad'] = id_variedad($cod);
+    return api('PATCH', '/api/v1/canarios/' . $c['id'], $cuerpo);
+}
+// Texto del rechazo de la API (mensaje + errores por campo)
+function motivo_api($r) {
+    $m = trim($r['message'] . ' ' . implode(' ', array_map('strval', (array)$r['errors'])));
+    return $m ?: 'La API rechazó la operación.';
 }
 function parejas_activas_de($k) {
     return array_filter(parejas(), fn($p) => $p['estado'] === 'Activa' && ($p['macho'] === $k || $p['hembra'] === $k));
@@ -244,6 +277,14 @@ function validar_anillo($numero, $club, $socio, $temp) {
 }
 
 // ---------- Usuarios ----------
+// N.° de socio del criador conectado, para proponerlo en los anillos (se pide una vez por sesión)
+function mi_socio() {
+    if (!isset($_SESSION['mi_socio'])) {
+        $r = api('GET', '/api/v1/criador/perfil');
+        $_SESSION['mi_socio'] = $r['status'] === 200 ? (string)($r['data']['numero_socio'] ?? '') : '';
+    }
+    return $_SESSION['mi_socio'];
+}
 // Inicia sesión en la API (200 con data.token y data.user)
 function iniciar_sesion_api($correo, $clave) {
     return api('POST', '/api/login', ['correo' => $correo, 'password' => $clave], false);
