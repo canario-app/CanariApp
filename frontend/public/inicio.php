@@ -27,7 +27,8 @@ $tarjetas = [
   <div class="aviso aviso-warn"><?= icono('alerta') ?><div><strong><?= $n_revision === 1 ? '1 ejemplar requiere revisión' : "$n_revision ejemplares requieren revisión" ?></strong><p>Cambió el nomenclador y su variedad ya no coincide con el sexo registrado. <a href="canarios.php?filtro=revision" style="text-decoration:underline">Ver <?= $n_revision === 1 ? 'el ejemplar' : 'los ejemplares' ?></a></p></div></div>
 <?php endif; ?>
 
-<section style="margin-bottom:32px">
+<section class="hero-inicio" style="margin-bottom:32px">
+  <span class="hero-aves" aria-hidden="true"></span>
   <p class="eyebrow">Crianza de canarios de competencia</p>
   <h1 class="titulo-xl" style="margin:16px 0 24px; max-width:620px">Bienvenido, <?= e($criador) ?></h1>
   <a href="canarios.php" class="btn btn-primario">Ir a mis canarios <img src="img/flecha.svg" width="16" height="16" alt=""></a>
@@ -41,7 +42,7 @@ $tarjetas = [
   <div class="grid-3">
     <?php foreach ($tarjetas as [$icono, $titulo_t, $texto, $url]): ?>
       <a href="<?= $url ?>" class="card feature">
-        <div class="icono-caja"><img src="img/<?= $icono ?>" width="20" height="20" alt=""></div>
+        <div class="icono-caja"><span class="ico-img" style="-webkit-mask-image:url(img/<?= e($icono) ?>);mask-image:url(img/<?= e($icono) ?>)" aria-hidden="true"></span></div>
         <h3><?= e($titulo_t) ?></h3>
         <?php if ($texto): ?><p><?= e($texto) ?></p><?php endif; ?>
       </a>

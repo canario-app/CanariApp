@@ -28,3 +28,19 @@ document.querySelectorAll('[data-contador]').forEach(input => {
   const upd = () => out.textContent = `${input.value.length} / ${input.maxLength}`;
   input.addEventListener('input', upd); upd();
 });
+
+// Selector de tema (Sol / Luna): cambia al instante y guarda la preferencia en localStorage
+const aplicarTema = tema => {
+  document.documentElement.dataset.tema = tema;
+  try { localStorage.setItem('tema', tema); } catch (e) {}
+  document.querySelectorAll('[data-tema-btn]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.temaBtn === tema)));
+};
+const temaMovil = window.matchMedia('(max-width: 760px)');
+document.querySelectorAll('[data-tema-btn]').forEach(b => {
+  b.addEventListener('click', () => {
+    const tema = b.dataset.temaBtn;
+    const apagarOscuro = temaMovil.matches && tema === 'oscuro' && document.documentElement.dataset.tema === 'oscuro';
+    aplicarTema(apagarOscuro ? 'claro' : tema);
+  });
+});
+aplicarTema(document.documentElement.dataset.tema === 'oscuro' ? 'oscuro' : 'claro');

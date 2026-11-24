@@ -103,7 +103,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
     if (!d) { cont.innerHTML = '<p class="muted">Elija un ejemplar para ver sus títulos.</p>'; return; }
     badge.textContent = d.badge;
     cont.innerHTML = d.titulos.length
-      ? d.titulos.map(t => `<div class="nodo" style="background:#fff"><strong>${esc(t.nombre)}</strong><span>${t.fecha}</span></div>`).join('')
+      ? d.titulos.map(t => `<div class="nodo" style="background:var(--blanco)"><strong>${esc(t.nombre)}</strong><span>${t.fecha}</span></div>`).join('')
       : '<p class="muted">Este ejemplar aún no tiene títulos.</p>';
   }
   inp.addEventListener('input', upd); upd();

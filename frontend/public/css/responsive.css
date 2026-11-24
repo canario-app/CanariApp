@@ -32,19 +32,27 @@ img, svg { max-width: 100%; }
     position: sticky; top: 0; z-index: 40;
     padding-top: max(8px, env(safe-area-inset-top));
   }
-  .marca { gap: 8px; min-width: 0; }
+  .topbar .marca { flex: 1; min-width: 0; }
   .marca > div:last-child { min-width: 0; }
   .marca-logo { width: 36px; height: 36px; flex-shrink: 0; }
   .marca-nombre { font-size: 18px; }
-  .marca-criador { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38vw; }
+  .topbar .marca-nombre, .topbar .marca-rol { display: none; }
+  .topbar .marca-criador { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .usuario { gap: 8px; flex-shrink: 0; }
   .usuario .avatar { display: none; }
   .usuario .btn { height: 36px; padding: 0 10px; font-size: 14px; }
   .menu-btn {
-    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; flex-shrink: 0; padding: 0;
     border: 1px solid var(--gris-borde); border-radius: var(--radio); background: var(--blanco);
-    font-size: 14px; cursor: pointer;
+    cursor: pointer;
   }
+  :is(.topbar, .login-top) .tema-toggle { padding: 0; border: 0; }
+  .tema-toggle [data-tema-btn="claro"] { display: none; }
+  .tema-toggle [data-tema-btn="oscuro"] { width: 40px; height: 40px; }
+  .tema-toggle [aria-pressed="false"] { border: 1px solid currentColor; }
+  .tema-toggle [aria-pressed="false"] .tema-icono-luna { display: none; }
+  .tema-toggle [aria-pressed="false"] .tema-icono-sol-movil { display: block; }
 
   /* Menú lateral -> menú desplegable */
   .app { display: block; min-height: calc(100vh - 60px); }
@@ -149,3 +157,10 @@ img, svg { max-width: 100%; }
   .login-bg { padding: 16px; align-items: flex-start; padding-top: 10vh; }
   .login { width: 100%; max-width: 400px; }
 }
+
+@media (max-width: 380px) {
+  .topbar { padding-inline: 8px; gap: 6px; }
+  .topbar .marca, .topbar .usuario { gap: 6px; }
+  .topbar .marca-logo { width: 32px; height: 32px; }
+}
+

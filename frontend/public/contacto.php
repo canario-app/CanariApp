@@ -6,7 +6,7 @@ $admin = [
     'correo'   => getenv('CONTACTO_CORREO') ?: 'admin@canariapp.cl',
     'telefono' => getenv('CONTACTO_TELEFONO') ?: '',
 ];
-$volver = empty($_SESSION['usuario']) ? ['login.php', 'Volver a iniciar sesión'] : ['inicio.php', 'Volver al inicio'];
+$volver = empty($_SESSION['usuario']) ? ['login.php', 'Volver a inicio de sesión'] : ['inicio.php', 'Volver al inicio'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -18,8 +18,14 @@ $volver = empty($_SESSION['usuario']) ? ['login.php', 'Volver a iniciar sesión'
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/tema.css">
+  <?php include __DIR__ . '/../includes/tema_inicial.php'; ?>
 </head>
 <body>
+  <header class="login-top">
+    <div class="marca-logo"><img src="img/logo.svg" width="24" height="24" alt=""></div>
+    <div><h1>CanariApp</h1><p>Contacto con el administrador</p></div>
+  </header>
   <div class="login-bg">
     <div class="login">
       <div>
@@ -32,7 +38,7 @@ $volver = empty($_SESSION['usuario']) ? ['login.php', 'Volver a iniciar sesión'
         <?php if ($admin['telefono'] !== ''): ?><div><span>Teléfono</span><?= e($admin['telefono']) ?></div><?php endif; ?>
       </div>
       <p class="small muted" style="display:flex;gap:8px"><?= icono('info') ?> Indique su nombre y su número de socio para que pueda ubicarlo.</p>
-      <a href="<?= $volver[0] ?>" class="btn"><?= icono('atras', 14) ?> <?= $volver[1] ?></a>
+      <a href="<?= $volver[0] ?>" class="btn btn-volver"><?= icono('atras', 14) ?> <?= $volver[1] ?></a>
     </div>
   </div>
 </body>
