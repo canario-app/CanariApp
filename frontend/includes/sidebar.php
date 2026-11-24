@@ -23,10 +23,4 @@ $secciones = $esAdmin ? [
       <a href="<?= $url ?>" class="<?= ($pagina ?? '') === $clave ? 'activo' : '' ?>"><?= e($texto) ?></a>
     <?php endforeach; ?>
   </nav>
-  <?php if (!$esAdmin): ?>
-  <div class="etapa">
-    <span class="eyebrow">Etapa posterior</span>
-    <span>Sugerencias de parejas</span>
-  </div>
-  <?php endif; ?>
 </aside>

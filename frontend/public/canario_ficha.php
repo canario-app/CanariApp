@@ -160,7 +160,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <?php else: [$p, $otro, $cs] = $grupos[$tab]; ?>
         <nav class="tabs" style="margin:12px 0 0">
           <?php foreach ($grupos as $pid => [$gp, $go, $gc]): ?>
-            <a href="<?= e($url) ?>&amp;pareja=<?= $pid ?>#crias" class="<?= $pid === $tab ? 'activo' : '' ?>">Con <?= e($go['numero']) ?> <?= $rol_otro === 'hembra' ? '♀' : '♂' ?> · <?= count($gc) ?></a>
+            <a href="canario_ficha.php?id=<?= e(urlencode($k)) ?>&amp;pareja=<?= $pid ?>#crias" class="<?= $pid === $tab ? 'activo' : '' ?>">Con <?= e($go['numero']) ?> <?= $rol_otro === 'hembra' ? '♀' : '♂' ?> · <?= count($gc) ?></a>
           <?php endforeach; ?>
         </nav>
         <p class="xs muted" style="margin-top:8px"><?= e(anillo_txt($otro)) ?><?= $otro['variedad'] ? ' · ' . e(variedad_txt($otro['variedad'])) : '' ?> · Jaula <?= e($p['jaula']) ?><?= $p['estado'] !== 'Activa' ? ' · pareja ' . e(mb_strtolower($p['estado'])) : '' ?></p>

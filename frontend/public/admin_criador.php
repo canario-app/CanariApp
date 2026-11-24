@@ -4,14 +4,14 @@ requerir_login();
 
 // Sin ?id = registrar un criador nuevo; con ?id = ver y editar
 $id = (int)($_GET['id'] ?? 0);
-$criador = null;
+$cuenta = null; // no usar $criador: header.php lo ocupa para el nombre del usuario conectado
 if ($id) {
     $r = api('GET', '/api/v1/admin/criadores/' . $id);
     if ($r['status'] !== 200) redirigir('admin_criadores.php', 'Criador no encontrado', 'Esa cuenta ya no existe.');
-    $criador = $r['data'];
+    $cuenta = $r['data'];
 }
 
-$v = ['nombre' => $criador['nombre'] ?? '', 'correo' => $criador['correo'] ?? '', 'numero_socio' => $criador['numero_socio'] ?? '', 'password' => ''];
+$v = ['nombre' => $cuenta['nombre'] ?? '', 'correo' => $cuenta['correo'] ?? '', 'numero_socio' => $cuenta['numero_socio'] ?? '', 'password' => ''];
 $err = [];
 $aviso_api = '';
 
@@ -52,10 +52,10 @@ $cls = fn($campo) => isset($err[$campo]) ? ' error' : '';
 $msg = fn($campo, $ayuda = '') => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$campo]) . '</span>' : ($ayuda ? '<span class="ayuda-campo">' . e($ayuda) . '</span>' : '');
 ?>
 
-<p class="migas"><a href="admin_criadores.php">Criadores</a> / <?= $id ? e($criador['nombre']) : 'Registrar criador' ?></p>
+<p class="migas"><a href="admin_criadores.php">Criadores</a> / <?= $id ? e($cuenta['nombre']) : 'Registrar criador' ?></p>
 <div>
   <p class="eyebrow">Administración</p>
-  <h1 class="titulo-l"><?= $id ? e($criador['nombre']) : 'Registrar criador' ?></h1>
+  <h1 class="titulo-l"><?= $id ? e($cuenta['nombre']) : 'Registrar criador' ?></h1>
   <p class="bajada"><?= $id ? 'Consulte y edite los datos de la cuenta. La contraseña solo se cambia si escribe una nueva.' : 'Cree la cuenta con la que el criador entrará a CanariApp.' ?></p>
 </div>
 
@@ -107,9 +107,9 @@ $msg = fn($campo, $ayuda = '') => isset($err[$campo]) ? '<span class="msg-error"
   <aside class="panel-gris">
     <?php if ($id): ?>
       <h3>Ficha de la cuenta</h3>
-      <div style="display:flex;justify-content:space-between"><span class="muted">N.° de socio</span><strong><?= e($criador['numero_socio']) ?></strong></div>
+      <div style="display:flex;justify-content:space-between"><span class="muted">N.° de socio</span><strong><?= e($cuenta['numero_socio']) ?></strong></div>
       <div style="display:flex;justify-content:space-between"><span class="muted">Rol</span><strong>Criador</strong></div>
-      <div style="display:flex;justify-content:space-between"><span class="muted">Alta</span><strong><?= e(fecha(substr($criador['fecha_creacion'], 0, 10))) ?></strong></div>
+      <div style="display:flex;justify-content:space-between"><span class="muted">Alta</span><strong><?= e(fecha(substr($cuenta['fecha_creacion'], 0, 10))) ?></strong></div>
       <hr style="border:0;border-top:1px solid var(--gris-borde)">
       <p class="muted" style="display:flex;gap:8px"><?= icono('info') ?><span>Si cambia el correo o la contraseña, el criador deberá usar los nuevos datos la próxima vez que inicie sesión.</span></p>
     <?php else: ?>
