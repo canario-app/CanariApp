@@ -79,48 +79,63 @@ if ($bloqueado) {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/tema.css">
+  <?php include __DIR__ . '/../includes/tema_inicial.php'; ?>
 </head>
 <body>
-  <div class="login-bg">
-    <form class="login" method="POST" action="login.php" novalidate>
-      <div>
-        <h1>Iniciar sesión</h1>
-        <p class="desc">Ingrese con la cuenta que le entregó el administrador.</p>
-      </div>
+  <header class="login-top">
+    <div class="marca-logo"><img src="img/logo.svg" width="24" height="24" alt=""></div>
+    <div><div class="marca-nombre">CanariApp</div><p>Por favor inicie sesión</p></div>
+    <?php include __DIR__ . '/../includes/tema_selector.php'; ?>
+  </header>
+  <main class="login-bg login-bg-ilustrado">
+    <div class="login-panel">
+      <section class="login-presentacion" aria-labelledby="titulo-login">
+        <div class="login-presentacion-texto">
+          <h1 id="titulo-login">CanariApp</h1>
+          <p>Su espacio para la gestión y cuidado de sus canarios.</p>
+        </div>
+        <picture class="login-canarios">
+          <source media="(max-width: 760px)" srcset="img/canarios-login.webp" width="1200" height="792">
+          <img src="img/canarios-login-escritorio.webp" width="1350" height="675" alt="Dos canarios amarillos sobre una rama">
+        </picture>
+      </section>
+      <form class="login login-form" method="POST" action="login.php" novalidate aria-label="Iniciar sesión">
 
-      <?php if ($aviso): ?>
-        <div class="aviso <?= $aviso[0] ?>">
-          <?= icono($bloqueado ? 'candado' : ($aviso[0] ? 'alerta' : 'info')) ?>
-          <div>
-            <strong><?= e($aviso[1]) ?></strong>
-            <p><?= e($aviso[2]) ?></p>
-            <?php if ($bloqueado): ?><div class="contador" id="contador" data-fin="<?= $bloqueo_hasta ?>"></div><?php endif; ?>
+        <?php if ($aviso): ?>
+          <div class="aviso <?= $aviso[0] ?>">
+            <?= icono($bloqueado ? 'candado' : ($aviso[0] ? 'alerta' : 'info')) ?>
+            <div>
+              <strong><?= e($aviso[1]) ?></strong>
+              <p><?= e($aviso[2]) ?></p>
+              <?php if ($bloqueado): ?><div class="contador" id="contador" data-fin="<?= $bloqueo_hasta ?>"></div><?php endif; ?>
+            </div>
           </div>
+        <?php endif; ?>
+
+        <div class="campo<?= $err_correo ? ' error' : '' ?>">
+          <label for="correo">Correo electrónico</label>
+          <input class="input" type="email" id="correo" name="correo" placeholder="nombre@correo.cl" value="<?= e($correo) ?>" required <?= $bloqueado ? 'disabled' : '' ?>>
+          <?php if ($err_correo): ?><span class="msg-error"><?= e($err_correo) ?></span><?php endif; ?>
         </div>
-      <?php endif; ?>
 
-      <div class="campo<?= $err_correo ? ' error' : '' ?>">
-        <label for="correo">Correo electrónico</label>
-        <input class="input" type="email" id="correo" name="correo" placeholder="nombre@correo.cl" value="<?= e($correo) ?>" required <?= $bloqueado ? 'disabled' : '' ?>>
-        <?php if ($err_correo): ?><span class="msg-error"><?= e($err_correo) ?></span><?php endif; ?>
-      </div>
-
-      <div class="campo<?= $err_clave ? ' error' : '' ?>">
-        <label for="clave">Contraseña</label>
-        <div class="input-icono der">
-          <input class="input" type="password" id="clave" name="clave" placeholder="Mínimo 8 caracteres" minlength="8" required <?= $bloqueado ? 'disabled' : '' ?>>
-          <img src="img/ojo.svg" alt="Mostrar contraseña" id="verClave">
+        <div class="campo<?= $err_clave ? ' error' : '' ?>">
+          <label for="clave">Contraseña</label>
+          <div class="input-icono der">
+            <input class="input" type="password" id="clave" name="clave" placeholder="Mínimo 8 caracteres" minlength="8" required <?= $bloqueado ? 'disabled' : '' ?>>
+            <img src="img/ojo.svg" alt="Mostrar contraseña" id="verClave">
+          </div>
+          <?php if ($err_clave): ?><span class="msg-error"><?= e($err_clave) ?></span><?php endif; ?>
         </div>
-        <?php if ($err_clave): ?><span class="msg-error"><?= e($err_clave) ?></span><?php endif; ?>
-      </div>
 
-      <button type="submit" class="btn btn-primario" id="btnIngresar" disabled>Ingresar</button>
+        <button type="submit" class="btn btn-primario" id="btnIngresar" disabled>Ingresar</button>
 
-      <hr>
+        <hr>
 
-      <p class="ayuda-login">¿Problemas para ingresar?<br><a href="contacto.php">Contacte al administrador</a></p>
-    </form>
-  </div>
+        <p class="ayuda-login">¿Problemas para ingresar?<br><a href="contacto.php">Contacte al administrador</a></p>
+      </form>
+    </div>
+  </main>
 
   <script>
     // Habilita "Ingresar" solo con correo válido y contraseña de 8+ caracteres (igual que el Figma)
@@ -148,5 +163,6 @@ if ($bloqueado) {
       tick(); setInterval(tick, 1000);
     }
   </script>
+  <script src="js/app.js"></script>
 </body>
 </html>
