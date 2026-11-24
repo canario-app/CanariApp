@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CanariApp\Backend\Controllers;
 
+use CanariApp\Backend\Config\Db;
 use CanariApp\Backend\Helpers\AuditHelper;
+use CanariApp\Backend\Helpers\BackupCrypto;
 use CanariApp\Backend\Helpers\ResponseHelper;
 use CanariApp\Backend\Helpers\Sanitizer;
 use CanariApp\Backend\Middlewares\AuthMiddleware;
@@ -19,6 +21,12 @@ use Throwable;
  * Mantiene como máximo los 7 respaldos más recientes en la tabla respaldo
  * y ejecuta respaldo automático cuando han transcurrido 48 horas (2 días)
  * desde el último respaldo registrado.
+ *
+ * Los archivos se guardan cifrados (AES-256-GCM, ver BackupCrypto) con la clave
+ * BACKUP_ENCRYPTION_KEY. El SQL en texto plano solo existe en memoria.
+ *
+ * La misma clase sirve para la base local (Docker) y para Neon: la base que se
+ * respalda es la indicada en DB_HOST/DB_NAME (servicio respaldo-neon de compose.yaml).
  */
 class BackupController {
     private const SERVER_FIELDS = [
@@ -26,6 +34,13 @@ class BackupController {
         'fecha_hora',
         'id_usuario',
     ];
+
+    /** Margen para que el cron diario no se salte un ciclo por segundos de diferencia. */
+    private const SCHEDULE_TOLERANCE_SECONDS = 7200;
+
+    private const RESTORE_ERROR_NORMAL_MODE = 'normal_mode';
+    private const RESTORE_ERROR_NOT_FOUND = 'not_found';
+    private const RESTORE_ERROR_FILE_MISSING = 'file_missing';
 
     private Backup $backupModel;
 
@@ -83,7 +98,7 @@ class BackupController {
 
     /**
      * [Admin] Genera/registra un respaldo y rota los excedentes más allá de los 7 más recientes.
-     * Si pg_dump falla, aborta sin registrar en base de datos ni eliminar respaldos previos.
+     * Si pg_dump o el cifrado fallan, aborta sin registrar en base de datos ni eliminar respaldos previos.
      */
     public function store(): void {
         $adminUserId = $this->ensureAdminRole();
@@ -97,8 +112,8 @@ class BackupController {
 
         $requestedFile = is_string($input['archivo'] ?? null) ? trim($input['archivo']) : '';
         $fileName = $requestedFile !== ''
-            ? $requestedFile
-            : sprintf('canariapp_backup_%s_%s.sql', date('Ymd_His'), bin2hex(random_bytes(3)));
+            ? $this->withEncryptedExtension($requestedFile)
+            : $this->newBackupFileName('canariapp_backup');
 
         $motivo = is_string($input['motivo'] ?? null) && trim($input['motivo']) !== ''
             ? trim($input['motivo'])
@@ -106,7 +121,7 @@ class BackupController {
 
         if (!$this->createPhysicalDump($fileName)) {
             ResponseHelper::internalError(
-                'No se pudo generar el archivo de respaldo con pg_dump; no se registró el respaldo ni se aplicó la rotación.'
+                'No se pudo generar el archivo de respaldo cifrado (pg_dump o BACKUP_ENCRYPTION_KEY); no se registró el respaldo ni se aplicó la rotación.'
             );
             return;
         }
@@ -138,6 +153,7 @@ class BackupController {
                 recordId: $createdId,
                 newValue: [
                     'archivo' => $fileName,
+                    'cifrado' => true,
                     'rotados' => $rotatedFiles,
                 ],
                 reason: $motivo,
@@ -162,6 +178,8 @@ class BackupController {
      *  - Rechaza la operación en modo normal; solo se permite en mantenimiento o emergencia.
      *  - Ejecuta psql en una única transacción (--single-transaction) usando el usuario dueño
      *    de las tablas (DB_RESTORE_USER / postgres) sin otorgar permisos de borrado a canariapp.
+     *  - En Vercel los archivos no existen (están en el Docker de respaldo conectado a Neon);
+     *    allí la restauración se hace con bin/restore_backup.php (ver docs/respaldos_neon.md).
      */
     public function restore(int|string $id): void {
         $adminUserId = $this->ensureAdminRole();
@@ -183,53 +201,33 @@ class BackupController {
             : sprintf('Restauración de base de datos desde respaldo #%d (RF029)', $idRespaldo);
 
         try {
-            $activeMode = (new OperationMode())->findActive();
-            if ($activeMode === null) {
-                ResponseHelper::conflict(
-                    'No se puede restaurar un respaldo en modo normal. Active primero el modo mantenimiento o emergencia (RF029).'
-                );
+            $target = $this->locateRestorableBackup($idRespaldo);
+
+            if (is_string($target)) {
+                match ($target) {
+                    self::RESTORE_ERROR_NORMAL_MODE => ResponseHelper::conflict(
+                        'No se puede restaurar un respaldo en modo normal. Active primero el modo mantenimiento o emergencia (RF029).'
+                    ),
+                    self::RESTORE_ERROR_NOT_FOUND => ResponseHelper::notFound('Respaldo no encontrado.'),
+                    default => ResponseHelper::notFound($this->isVercel()
+                        ? 'Los archivos de respaldo no se guardan en Vercel. La restauración de Neon se hace desde el Docker de respaldo conectado a Neon, con el sistema en mantenimiento (ver docs/respaldos_neon.md).'
+                        : 'El archivo físico del respaldo no existe o está vacío en el servidor.'),
+                };
                 return;
             }
 
-            $backup = $this->backupModel->findDetailed($idRespaldo);
-            if ($backup === null) {
-                ResponseHelper::notFound('Respaldo no encontrado.');
-                return;
-            }
-
-            $safeName = basename(trim((string) $backup['archivo']));
-            $targetPath = $this->backupDirectory() . DIRECTORY_SEPARATOR . $safeName;
-
-            if ($safeName === '' || !is_file($targetPath) || (int) @filesize($targetPath) <= 0) {
-                ResponseHelper::notFound(
-                    'El archivo físico del respaldo no existe o está vacío en el servidor.'
-                );
-                return;
-            }
-
-            if (!$this->restorePhysicalDump($targetPath)) {
+            if (!$this->restorePhysicalDump($target['path'])) {
                 ResponseHelper::internalError(
-                    'No se pudo restaurar el respaldo mediante psql; revise el log del servidor y verifique las credenciales de propietario (DB_RESTORE_USER) y la integridad del archivo SQL.'
+                    'No se pudo restaurar el respaldo mediante psql; revise el log del servidor y verifique las credenciales de propietario (DB_RESTORE_USER), la clave BACKUP_ENCRYPTION_KEY y la integridad del archivo.'
                 );
                 return;
             }
 
-            AuditHelper::log(
-                action: 'restauracion',
-                entity: 'respaldo',
-                recordId: $idRespaldo,
-                newValue: [
-                    'id_respaldo'    => $idRespaldo,
-                    'archivo'        => $safeName,
-                    'modo_operacion' => (string) $activeMode['modo'],
-                ],
-                reason: $motivo,
-                userId: $adminUserId
-            );
+            $this->auditRestore($idRespaldo, $target['file'], $target['mode'], $motivo, $adminUserId);
 
             ResponseHelper::success([
-                'respaldo'       => $backup,
-                'modo_operacion' => (string) $activeMode['modo'],
+                'respaldo'       => $target['backup'],
+                'modo_operacion' => $target['mode'],
                 'restaurado'     => true,
             ], 'Respaldo restaurado exitosamente.');
         } catch (Throwable) {
@@ -238,20 +236,55 @@ class BackupController {
     }
 
     /**
+     * Restauración desde línea de comandos (bin/restore_backup.php), usada para Neon:
+     * el administrador la ejecuta en el Docker de respaldo con el sistema en mantenimiento.
+     *
+     * @return array{respaldo: array<string, mixed>, modo_operacion: string}
+     */
+    public function restoreFromCli(int $idRespaldo, ?int $adminUserId, string $motivo): array {
+        $target = $this->locateRestorableBackup($idRespaldo);
+
+        if (is_string($target)) {
+            throw new RuntimeException(match ($target) {
+                self::RESTORE_ERROR_NORMAL_MODE => 'El sistema está en modo normal. Active el modo mantenimiento (o emergencia) desde el panel de administración antes de restaurar (RF029).',
+                self::RESTORE_ERROR_NOT_FOUND => sprintf('No existe el respaldo #%d en la base conectada.', $idRespaldo),
+                default => sprintf('El archivo del respaldo #%d no está en este Docker (storage/backups) o está vacío.', $idRespaldo),
+            });
+        }
+
+        if (!$this->restorePhysicalDump($target['path'])) {
+            throw new RuntimeException('psql no pudo restaurar el respaldo; el detalle quedó en storage/logs/restore.log. La base quedó sin cambios (transacción única).');
+        }
+
+        $this->auditRestore($idRespaldo, $target['file'], $target['mode'], $motivo, $adminUserId);
+
+        return [
+            'respaldo'       => $target['backup'],
+            'modo_operacion' => $target['mode'],
+        ];
+    }
+
+    /**
      * Ejecuta el respaldo automático programado (CLI / cron) cuando hayan pasado
      * al menos 48 horas desde el último respaldo, o inmediatamente si $force = true.
      *
+     * $fromScheduler = true aplica un margen de 2 horas: el cron corre todos los días
+     * a las 03:00 y sin el margen un respaldo hecho a las 03:00:05 haría que el del
+     * día siguiente-al-siguiente (47 h 59 min después) se omitiera.
+     *
      * @return array{respaldo: array<string, mixed>, rotados: array<int, string>}|null
      */
-    public function runScheduledAutoBackup(bool $force = false): ?array {
-        if (!$force && !$this->backupModel->isAutoBackupDue()) {
+    public function runScheduledAutoBackup(bool $force = false, bool $fromScheduler = false): ?array {
+        $interval = Backup::AUTO_BACKUP_INTERVAL_SECONDS - ($fromScheduler ? self::SCHEDULE_TOLERANCE_SECONDS : 0);
+
+        if (!$force && !$this->backupModel->isAutoBackupDue($interval)) {
             return null;
         }
 
-        $fileName = sprintf('canariapp_auto_backup_%s_%s.sql', date('Ymd_His'), bin2hex(random_bytes(3)));
+        $fileName = $this->newBackupFileName('canariapp_auto_backup');
 
         if (!$this->createPhysicalDump($fileName)) {
-            throw new RuntimeException('No se pudo generar el volcado automático con pg_dump.');
+            throw new RuntimeException('No se pudo generar el volcado automático cifrado (detalle en storage/logs/backup.log).');
         }
 
         $result = $this->backupModel->registerAndRotate($fileName, null);
@@ -280,6 +313,7 @@ class BackupController {
             newValue: [
                 'archivo'    => $fileName,
                 'automatico' => true,
+                'cifrado'    => true,
                 'rotados'    => $rotatedFiles,
             ],
             reason: 'Respaldo automático programado (cada 2 días)',
@@ -298,6 +332,11 @@ class BackupController {
      * @return array{respaldo: array<string, mixed>, rotados: array<int, string>}|null
      */
     private function runAutomaticBackupIfDue(): ?array {
+        if ($this->isVercel()) {
+            // En Vercel no hay pg_dump ni disco persistente: respalda el servicio respaldo-neon del Docker.
+            return null;
+        }
+
         try {
             return $this->runScheduledAutoBackup(false);
         } catch (Throwable $exception) {
@@ -305,6 +344,52 @@ class BackupController {
 
             return null;
         }
+    }
+
+    /**
+     * Comprueba modo de operación, existencia del registro y del archivo físico.
+     *
+     * @return array{mode: string, backup: array<string, mixed>, file: string, path: string}|string
+     */
+    private function locateRestorableBackup(int $idRespaldo): array|string {
+        $activeMode = (new OperationMode())->findActive();
+        if ($activeMode === null) {
+            return self::RESTORE_ERROR_NORMAL_MODE;
+        }
+
+        $backup = $this->backupModel->findDetailed($idRespaldo);
+        if ($backup === null) {
+            return self::RESTORE_ERROR_NOT_FOUND;
+        }
+
+        $safeName = basename(trim((string) $backup['archivo']));
+        $targetPath = $this->backupDirectory() . DIRECTORY_SEPARATOR . $safeName;
+
+        if ($safeName === '' || !is_file($targetPath) || (int) @filesize($targetPath) <= 0) {
+            return self::RESTORE_ERROR_FILE_MISSING;
+        }
+
+        return [
+            'mode'   => (string) $activeMode['modo'],
+            'backup' => $backup,
+            'file'   => $safeName,
+            'path'   => $targetPath,
+        ];
+    }
+
+    private function auditRestore(int $idRespaldo, string $fileName, string $mode, string $motivo, ?int $userId): void {
+        AuditHelper::log(
+            action: 'restauracion',
+            entity: 'respaldo',
+            recordId: $idRespaldo,
+            newValue: [
+                'id_respaldo'    => $idRespaldo,
+                'archivo'        => $fileName,
+                'modo_operacion' => $mode,
+            ],
+            reason: $motivo,
+            userId: $userId
+        );
     }
 
     /**
@@ -325,8 +410,8 @@ class BackupController {
                 $errors['archivo'] = 'El nombre de archivo no puede estar vacío.';
             } else {
                 $clean = trim($input['archivo']);
-                if (mb_strlen($clean) > 255) {
-                    $errors['archivo'] = 'El nombre de archivo no puede superar los 255 caracteres.';
+                if (mb_strlen($clean) > 247) {
+                    $errors['archivo'] = 'El nombre de archivo no puede superar los 247 caracteres.';
                 } elseif (preg_match('/^[A-Za-z0-9._-]+$/', $clean) !== 1 || str_contains($clean, '..')) {
                     $errors['archivo'] = 'El nombre de archivo solo puede contener letras, números, puntos, guiones y guiones bajos.';
                 }
@@ -340,49 +425,103 @@ class BackupController {
         return $errors;
     }
 
+    private function newBackupFileName(string $prefix): string {
+        return sprintf('%s_%s_%s%s', $prefix, date('Ymd_His'), bin2hex(random_bytes(3)), BackupCrypto::EXTENSION);
+    }
+
     /**
-     * Genera el volcado SQL mediante pg_dump en storage/backups/ con --clean --if-exists
-     * conservando privilegios (GRANT) para garantizar una restauración íntegra (SRS-RF029).
+     * Normaliza un nombre pedido por el administrador para que termine en .sql.enc.
+     */
+    private function withEncryptedExtension(string $fileName): string {
+        if (str_ends_with($fileName, BackupCrypto::EXTENSION)) {
+            return $fileName;
+        }
+
+        if (str_ends_with($fileName, '.sql')) {
+            $fileName = substr($fileName, 0, -4);
+        }
+
+        return $fileName . BackupCrypto::EXTENSION;
+    }
+
+    /**
+     * Genera el volcado con pg_dump (--clean --if-exists, conservando GRANT) y lo guarda
+     * cifrado en storage/backups/. El SQL plano se lee desde la salida estándar de pg_dump
+     * y se cifra en memoria (SRS-RF029, DAT-003).
      */
     private function createPhysicalDump(string $fileName): bool {
-        if (!function_exists('exec')) {
+        try {
+            $secret = BackupCrypto::secretFromEnvironment();
+        } catch (Throwable $exception) {
+            $this->logBackupError($exception->getMessage());
+            return false;
+        }
+
+        if (!function_exists('proc_open')) {
+            $this->logBackupError('La función proc_open() está deshabilitada en PHP; no se puede ejecutar pg_dump.');
             return false;
         }
 
         $backupDir = $this->backupDirectory();
         if (!is_dir($backupDir) && !@mkdir($backupDir, 0750, true) && !is_dir($backupDir)) {
+            $this->logBackupError('No se pudo crear el directorio de respaldos: ' . $backupDir);
             return false;
         }
 
         $db = $this->databaseCredentials();
         if ($db === null) {
+            $this->logBackupError('Credenciales de base de datos no configuradas (DB_HOST, DB_NAME, DB_USER).');
             return false;
         }
 
         $targetPath = $backupDir . DIRECTORY_SEPARATOR . basename($fileName);
         if (is_file($targetPath)) {
+            $this->logBackupError('Ya existe un archivo con el nombre ' . basename($fileName));
             return false;
         }
 
-        $command = sprintf(
-            'PGPASSWORD=%s pg_dump -h %s -p %s -U %s -F p --clean --if-exists --no-owner -f %s %s 2>/dev/null',
-            escapeshellarg($db['pass']),
-            escapeshellarg($db['host']),
-            escapeshellarg($db['port']),
-            escapeshellarg($db['user']),
-            escapeshellarg($targetPath),
-            escapeshellarg($db['name'])
+        $result = $this->runPgTool(
+            [
+                $this->pgBinary('pg_dump'),
+                '-h', $db['host'],
+                '-p', $db['port'],
+                '-U', $db['user'],
+                '-F', 'p',
+                '--clean',
+                '--if-exists',
+                '--no-owner',
+                $db['name'],
+            ],
+            $db,
+            null
         );
 
-        $output = [];
-        $exitCode = 1;
-        @exec($command, $output, $exitCode);
+        if ($result['exit'] !== 0 || trim($result['stdout']) === '') {
+            $this->logBackupError(sprintf(
+                'pg_dump falló contra %s/%s con usuario "%s" (exit=%d): %s',
+                $db['host'],
+                $db['name'],
+                $db['user'],
+                $result['exit'],
+                $result['stderr'] !== '' ? $result['stderr'] : 'sin salida de error'
+            ));
+            return false;
+        }
 
-        if ($exitCode !== 0 || !is_file($targetPath) || (int) @filesize($targetPath) <= 0) {
-            if (is_file($targetPath)) {
-                @unlink($targetPath);
-            }
+        try {
+            $encrypted = BackupCrypto::encrypt($result['stdout'], $secret);
+        } catch (Throwable $exception) {
+            $this->logBackupError($exception->getMessage());
+            return false;
+        }
 
+        $previousUmask = umask(0027);
+        $written = @file_put_contents($targetPath, $encrypted, LOCK_EX);
+        umask($previousUmask);
+
+        if ($written === false || $written !== strlen($encrypted)) {
+            @unlink($targetPath);
+            $this->logBackupError('No se pudo escribir el archivo cifrado ' . basename($fileName));
             return false;
         }
 
@@ -390,22 +529,34 @@ class BackupController {
     }
 
     /**
-     * Restaura un archivo SQL de respaldo en PostgreSQL mediante psql en una sola transacción
-     * (--single-transaction / -1) usando el usuario propietario de las tablas (SRS-RF029).
+     * Restaura un respaldo en PostgreSQL mediante psql en una sola transacción
+     * (--single-transaction) usando el usuario propietario de las tablas (SRS-RF029).
      *
-     * Si ocurre cualquier error durante la carga, PostgreSQL ejecuta ROLLBACK completo
-     * dejando intacto el estado previo de la base de datos y registrando el detalle en log.
+     * El archivo se descifra en memoria y se entrega a psql por la entrada estándar.
+     * Se aceptan también los .sql antiguos sin cifrar (anteriores a este cambio).
+     * Si ocurre cualquier error, PostgreSQL hace ROLLBACK completo.
      */
     private function restorePhysicalDump(string $targetPath): bool {
-        if (!function_exists('exec')) {
-            $this->logRestoreError('La función exec() está deshabilitada en PHP; no se puede ejecutar psql.');
+        if (!function_exists('proc_open')) {
+            $this->logRestoreError('La función proc_open() está deshabilitada en PHP; no se puede ejecutar psql.');
             return false;
         }
 
-        if (!is_file($targetPath)) {
-            $this->logRestoreError(sprintf('Archivo de respaldo no encontrado en disco: %s', basename($targetPath)));
+        $raw = is_file($targetPath) ? @file_get_contents($targetPath) : false;
+        if ($raw === false || $raw === '') {
+            $this->logRestoreError(sprintf('Archivo de respaldo no encontrado o vacío: %s', basename($targetPath)));
             return false;
         }
+
+        try {
+            $sql = BackupCrypto::isEncrypted($raw)
+                ? BackupCrypto::decrypt($raw, BackupCrypto::secretFromEnvironment())
+                : $raw;
+        } catch (Throwable $exception) {
+            $this->logRestoreError(sprintf('%s (%s)', $exception->getMessage(), basename($targetPath)));
+            return false;
+        }
+        unset($raw);
 
         $db = $this->restoreDatabaseCredentials();
         if ($db === null) {
@@ -413,28 +564,28 @@ class BackupController {
             return false;
         }
 
-        $command = sprintf(
-            'PGPASSWORD=%s psql --single-transaction -v ON_ERROR_STOP=1 -h %s -p %s -U %s -d %s -f %s 2>&1',
-            escapeshellarg($db['pass']),
-            escapeshellarg($db['host']),
-            escapeshellarg($db['port']),
-            escapeshellarg($db['user']),
-            escapeshellarg($db['name']),
-            escapeshellarg($targetPath)
+        $result = $this->runPgTool(
+            [
+                $this->pgBinary('psql'),
+                '--single-transaction',
+                '-v', 'ON_ERROR_STOP=1',
+                '-q',
+                '-h', $db['host'],
+                '-p', $db['port'],
+                '-U', $db['user'],
+                '-d', $db['name'],
+            ],
+            $db,
+            $sql
         );
 
-        $output = [];
-        $exitCode = 1;
-        @exec($command, $output, $exitCode);
-
-        if ($exitCode !== 0) {
-            $details = trim(implode("\n", $output));
+        if ($result['exit'] !== 0) {
             $this->logRestoreError(sprintf(
                 'Fallo al restaurar "%s" con usuario "%s" (exit=%d): %s',
                 basename($targetPath),
                 $db['user'],
-                $exitCode,
-                $details !== '' ? $details : 'sin salida de error de psql'
+                $result['exit'],
+                $result['stderr'] !== '' ? $result['stderr'] : 'sin salida de error de psql'
             ));
             return false;
         }
@@ -443,10 +594,127 @@ class BackupController {
     }
 
     /**
+     * Ejecuta pg_dump/psql sin pasar por la shell. La contraseña va por PGPASSWORD y,
+     * si DB_SSLMODE está definido (Neon exige "require"), se pasa como PGSSLMODE.
+     * stderr se redirige a un archivo temporal para evitar bloqueos de tuberías.
+     *
+     * @param array<int, string> $command
+     * @param array{host: string, port: string, name: string, user: string, pass: string, sslmode: ?string} $db
+     * @return array{exit: int, stdout: string, stderr: string}
+     */
+    private function runPgTool(array $command, array $db, ?string $stdin): array {
+        $env = [
+            'PATH'       => getenv('PATH') ?: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            'PGPASSWORD' => $db['pass'],
+            'PGCONNECT_TIMEOUT' => '30',
+            'LANG'       => 'C.UTF-8',
+        ];
+        if ($db['sslmode'] !== null) {
+            $env['PGSSLMODE'] = $db['sslmode'];
+        }
+
+        $stderrFile = tempnam(sys_get_temp_dir(), 'canari_pg_');
+        if ($stderrFile === false) {
+            return ['exit' => 1, 'stdout' => '', 'stderr' => 'No se pudo crear un archivo temporal.'];
+        }
+
+        $descriptors = [
+            0 => $stdin === null ? ['file', '/dev/null', 'r'] : ['pipe', 'r'],
+            1 => $stdin === null ? ['pipe', 'w'] : ['file', $stderrFile, 'a'],
+            2 => ['file', $stderrFile, 'a'],
+        ];
+
+        $process = @proc_open($command, $descriptors, $pipes, null, $env);
+        if (!is_resource($process)) {
+            @unlink($stderrFile);
+            return ['exit' => 1, 'stdout' => '', 'stderr' => 'No se pudo iniciar ' . $command[0]];
+        }
+
+        $stdout = '';
+        if ($stdin === null) {
+            $stdout = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+        } else {
+            $length = strlen($stdin);
+            for ($offset = 0; $offset < $length;) {
+                $written = @fwrite($pipes[0], substr($stdin, $offset, 65536));
+                if ($written === false || $written === 0) {
+                    break;
+                }
+                $offset += $written;
+            }
+            fclose($pipes[0]);
+        }
+
+        $exitCode = proc_close($process);
+        $stderr = trim((string) @file_get_contents($stderrFile));
+        @unlink($stderrFile);
+
+        return [
+            'exit'   => $exitCode,
+            'stdout' => $stdout,
+            'stderr' => mb_substr($stderr, 0, 4000),
+        ];
+    }
+
+    /**
+     * Elige el cliente de PostgreSQL de la misma versión que el servidor (o la más cercana
+     * superior). La imagen Docker trae los clientes 16, 17 y 18: así sirve tanto para la
+     * base local (16) como para Neon (17/18), sin que pg_dump rechace un servidor más nuevo.
+     */
+    private function pgBinary(string $tool): string {
+        $installed = [];
+        foreach (glob('/usr/lib/postgresql/*/bin/' . $tool) ?: [] as $path) {
+            if (is_executable($path)) {
+                $installed[(int) basename(dirname($path, 2))] = $path;
+            }
+        }
+
+        if ($installed === []) {
+            return $tool;
+        }
+        ksort($installed);
+
+        $serverMajor = null;
+        try {
+            $versionNum = Db::getConnection()->query('SHOW server_version_num')->fetchColumn();
+            if (is_numeric($versionNum)) {
+                $serverMajor = intdiv((int) $versionNum, 10000);
+            }
+        } catch (Throwable) {
+            $serverMajor = null;
+        }
+
+        if ($serverMajor !== null) {
+            foreach ($installed as $version => $path) {
+                if ($version >= $serverMajor) {
+                    return $path;
+                }
+            }
+            $this->logBackupError(sprintf(
+                'El servidor es PostgreSQL %d y el cliente más nuevo instalado es %d; agregue postgresql-client-%d en docker/php.Dockerfile.',
+                $serverMajor,
+                array_key_last($installed),
+                $serverMajor
+            ));
+        }
+
+        return end($installed);
+    }
+
+    private function logBackupError(string $message): void {
+        $this->writeLog('backup.log', '[CanariApp][Backup] ', $message);
+    }
+
+    /**
      * Registra errores de restauración de respaldos en error_log y en storage/logs/restore.log.
      */
     private function logRestoreError(string $message): void {
-        error_log('[CanariApp][BackupRestore] ' . $message);
+        $this->writeLog('restore.log', '[CanariApp][BackupRestore] ', $message);
+    }
+
+    private function writeLog(string $file, string $prefix, string $message): void {
+        error_log($prefix . $message);
 
         $logDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs';
         if (!is_dir($logDir)) {
@@ -455,14 +723,14 @@ class BackupController {
 
         if (is_dir($logDir) && is_writable($logDir)) {
             $line = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
-            @file_put_contents($logDir . DIRECTORY_SEPARATOR . 'restore.log', $line, FILE_APPEND | LOCK_EX);
+            @file_put_contents($logDir . DIRECTORY_SEPARATOR . $file, $line, FILE_APPEND | LOCK_EX);
         }
     }
 
     /**
      * Credenciales de aplicación para generación de volcados (pg_dump).
      *
-     * @return array{host: string, port: string, name: string, user: string, pass: string}|null
+     * @return array{host: string, port: string, name: string, user: string, pass: string, sslmode: ?string}|null
      */
     private function databaseCredentials(): ?array {
         $dbHost = $this->envValue(['DB_HOST']);
@@ -476,19 +744,20 @@ class BackupController {
         }
 
         return [
-            'host' => $dbHost,
-            'port' => $dbPort,
-            'name' => $dbName,
-            'user' => $dbUser,
-            'pass' => $dbPass,
+            'host'    => $dbHost,
+            'port'    => $dbPort,
+            'name'    => $dbName,
+            'user'    => $dbUser,
+            'pass'    => $dbPass,
+            'sslmode' => $this->envValue(['DB_SSLMODE']),
         ];
     }
 
     /**
-     * Credenciales del usuario propietario de las tablas (por defecto postgres)
-     * utilizadas exclusivamente al restaurar respaldos (SRS-RF029).
+     * Credenciales del usuario propietario de las tablas (por defecto postgres; en Neon,
+     * el dueño de la base, p. ej. neondb_owner) utilizadas exclusivamente al restaurar (SRS-RF029).
      *
-     * @return array{host: string, port: string, name: string, user: string, pass: string}|null
+     * @return array{host: string, port: string, name: string, user: string, pass: string, sslmode: ?string}|null
      */
     private function restoreDatabaseCredentials(): ?array {
         $base = $this->databaseCredentials();
@@ -500,11 +769,12 @@ class BackupController {
         $ownerPass = $this->envValue(['DB_RESTORE_PASS', 'POSTGRES_PASSWORD']) ?? $base['pass'];
 
         return [
-            'host' => $base['host'],
-            'port' => $base['port'],
-            'name' => $base['name'],
-            'user' => $ownerUser,
-            'pass' => $ownerPass,
+            'host'    => $base['host'],
+            'port'    => $base['port'],
+            'name'    => $base['name'],
+            'user'    => $ownerUser,
+            'pass'    => $ownerPass,
+            'sslmode' => $base['sslmode'],
         ];
     }
 
@@ -520,6 +790,10 @@ class BackupController {
         }
 
         return null;
+    }
+
+    private function isVercel(): bool {
+        return $this->envValue(['VERCEL']) !== null;
     }
 
     /**

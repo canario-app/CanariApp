@@ -22,6 +22,11 @@ cp .env.example .env   # cambiar las claves
 docker compose up -d --build --wait
 ```
 
+## Respaldos (DAT-003, RF029)
+
+- La API respalda su base cada 2 días en el volumen `canariapp_backups`, **cifrado** (`.sql.enc`, AES-256-GCM) con `BACKUP_ENCRYPTION_KEY` del `.env`. `Iniciar_CanariApp.cmd` genera esa clave si falta: guárdela fuera del PC.
+- La base de **Neon** (Vercel) la respalda el servicio `respaldo-neon`: `docker compose --profile neon up -d --build respaldo-neon`. Configuración y restauración en [`docs/respaldos_neon.md`](docs/respaldos_neon.md).
+
 ## Qué hace la base al crearse (solo con volumen vacío)
 
 `docker/db/01-canariapp.sh` ejecuta, en el orden de `BaseDatos/README.md`:

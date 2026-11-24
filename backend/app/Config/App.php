@@ -81,7 +81,8 @@ final class App{
             'url' => $baseUrl,
             'timezone' => $timezone,
             'jwt' => [
-                'secret' => self::environmentValue('JWT_SECRET', 'clave_por_defecto_insegura'),
+                // Sin valor por defecto: index.php y AuthHelper exigen 32 o más caracteres.
+                'secret' => self::environmentValue('JWT_SECRET', ''),
                 'expiration' => $jwtExpiration,
             ],
             'db' => [
@@ -90,6 +91,8 @@ final class App{
                 'name' => self::environmentValue('DB_NAME', 'mi_base_datos'),
                 'user' => self::environmentValue('DB_USER', 'postgres'),
                 'password' => self::environmentValue('DB_PASSWORD', 'password'),
+                // Neon exige SSL: DB_SSLMODE=require. Vacío = comportamiento por defecto de libpq.
+                'sslmode' => self::environmentValue('DB_SSLMODE', ''),
             ],
             'paths' => [
                 'root' => $projectRoot,
@@ -102,6 +105,28 @@ final class App{
         ];
 
         self::$initialized = true;
+    }
+
+    public const JWT_SECRET_MIN_LENGTH = 32;
+
+    /**
+     * Devuelve el error de configuración de JWT_SECRET, o null si es válido (32+ caracteres).
+     */
+    public static function jwtSecretProblem(): ?string{
+        $secret = (string) self::get('jwt.secret', '');
+
+        if ($secret === '') {
+            return 'Error de configuración del servidor: falta definir JWT_SECRET en el entorno.';
+        }
+
+        if (strlen($secret) < self::JWT_SECRET_MIN_LENGTH) {
+            return sprintf(
+                'Error de configuración del servidor: JWT_SECRET debe tener al menos %d caracteres.',
+                self::JWT_SECRET_MIN_LENGTH
+            );
+        }
+
+        return null;
     }
 
     private static function environmentValue(string $name, string $default): string{

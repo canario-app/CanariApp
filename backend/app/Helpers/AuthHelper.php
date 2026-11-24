@@ -16,17 +16,12 @@ class AuthHelper {
      * Obtiene la clave secreta JWT verificando que esté configurada y no vacía.
      */
     private static function getJwtSecret(): string {
-        $secret = App::get('jwt.secret')
-            ?? $_ENV['JWT_SECRET']
-            ?? getenv('JWT_SECRET');
-
-        if (!is_string($secret) || trim($secret) === '') {
-            throw new RuntimeException(
-                'Error de configuración del servidor: falta definir JWT_SECRET en el entorno.'
-            );
+        $problem = App::jwtSecretProblem();
+        if ($problem !== null) {
+            throw new RuntimeException($problem);
         }
 
-        return $secret;
+        return (string) App::get('jwt.secret');
     }
 
     /**

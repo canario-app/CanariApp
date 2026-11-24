@@ -28,12 +28,11 @@ try {
         ini_set('display_errors', '0');
     }
 
-    // Validación temprana de JWT_SECRET al arrancar
-    $jwtSecret = App::get('jwt.secret') ?? $_ENV['JWT_SECRET'] ?? getenv('JWT_SECRET');
-    if (!is_string($jwtSecret) || trim($jwtSecret) === '') {
-        ResponseHelper::internalError(
-            'Error de configuración del servidor: falta definir JWT_SECRET en el entorno.'
-        );
+    // Validación temprana de JWT_SECRET al arrancar (obligatorio, 32 o más caracteres)
+    $jwtProblem = App::jwtSecretProblem();
+    if ($jwtProblem !== null) {
+        error_log($jwtProblem);
+        ResponseHelper::internalError($jwtProblem);
     }
 
     // 2. Ejecutamos el router

@@ -30,7 +30,7 @@ try {
 
     $force = in_array('--force', $argv ?? [], true);
     $controller = new BackupController();
-    $result = $controller->runScheduledAutoBackup($force);
+    $result = $controller->runScheduledAutoBackup($force, true);
 
     if ($result === null) {
         fwrite(STDOUT, '[OK] Respaldo automático al día (menos de 48 horas desde el último respaldo).' . PHP_EOL);

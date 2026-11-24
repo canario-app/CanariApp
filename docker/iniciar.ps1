@@ -15,8 +15,17 @@ if (!(Test-Path '.env')) {
         -replace '^POSTGRES_PASSWORD=.*', "POSTGRES_PASSWORD=$(New-Secret)" `
         -replace '^DB_PASSWORD=.*', "DB_PASSWORD=$(New-Secret)" `
         -replace '^JWT_SECRET=.*', "JWT_SECRET=$(New-Secret)$(New-Secret)" `
+        -replace '^BACKUP_ENCRYPTION_KEY=.*', "BACKUP_ENCRYPTION_KEY=$(New-Secret)$(New-Secret)" `
         -replace '^ADMIN_PASSWORD=.*', "ADMIN_PASSWORD=$admin" | Set-Content '.env' -Encoding ascii
     "CanariApp (Docker)`r`nWeb: http://localhost:8080`r`nAPI: http://localhost:8081/api/health`r`nAdministrador: admin@canariapp.cl`r`nClave: $admin`r`n`r`nLos criadores los crea el administrador en la sección Criadores.`r`nArchivo privado: no subir a GitHub." | Set-Content 'ACCESO_LOCAL.txt' -Encoding utf8
+}
+
+# .env creados antes del cifrado de respaldos: se agrega la clave que falta
+if (!(Select-String -Path '.env' -Pattern '^BACKUP_ENCRYPTION_KEY=.{32,}' -Quiet)) {
+    $lines = @(Get-Content '.env' | Where-Object { $_ -notmatch '^BACKUP_ENCRYPTION_KEY=' })
+    $lines += "BACKUP_ENCRYPTION_KEY=$(New-Secret)$(New-Secret)"
+    $lines | Set-Content '.env' -Encoding ascii
+    Write-Host 'Se agregó BACKUP_ENCRYPTION_KEY al .env. Guarde una copia de esa clave fuera de este PC.' -ForegroundColor Yellow
 }
 
 & docker compose up -d --build --wait --wait-timeout 300

@@ -52,6 +52,7 @@ services:
       DB_RESTORE_PASS: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
       JWT_EXPIRATION: "1800"
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?Defina BACKUP_ENCRYPTION_KEY en .env (32+ caracteres; Iniciar_CanariApp.cmd la genera)}
     volumes:
       - canariapp_backups:/var/www/app/storage/backups
     ports:
@@ -81,6 +82,39 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Respaldo de la base de NEON (la que usa Vercel) cada 2 días, cifrado (SRS DAT-003, RF029).
+  # No arranca con "docker compose up": se activa con el perfil "neon".
+  #   docker compose --profile neon up -d --build respaldo-neon
+  # Requiere NEON_* en .env (ver docs/respaldos_neon.md). Usa el host DIRECTO de Neon (sin "-pooler").
+  respaldo-neon:
+    profiles: ["neon"]
+    build:
+      context: .
+      dockerfile: docker/php.Dockerfile
+      target: api
+    command: ["canariapp-start", "respaldo"]
+    environment:
+      APP_NAME: CanariApp
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_TIMEZONE: America/Santiago
+      TZ: America/Santiago
+      DB_HOST: ${NEON_DB_HOST:-}
+      DB_PORT: ${NEON_DB_PORT:-5432}
+      DB_NAME: ${NEON_DB_NAME:-neondb}
+      DB_USER: ${NEON_DB_USER:-canariapp}
+      DB_PASSWORD: ${NEON_DB_PASSWORD:-}
+      DB_RESTORE_USER: ${NEON_DB_OWNER_USER:-neondb_owner}
+      DB_RESTORE_PASS: ${NEON_DB_OWNER_PASSWORD:-}
+      DB_SSLMODE: require
+      BACKUP_ENCRYPTION_KEY: ${NEON_BACKUP_ENCRYPTION_KEY:-${BACKUP_ENCRYPTION_KEY:-}}
+    volumes:
+      - canariapp_backups_neon:/var/www/app/storage/backups
+      - canariapp_backups_neon_logs:/var/www/app/storage/logs
+    restart: unless-stopped
+
 volumes:
   canariapp_pg:
   canariapp_backups:
+  canariapp_backups_neon:
+  canariapp_backups_neon_logs:

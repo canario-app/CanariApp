@@ -14,12 +14,14 @@ COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
 
 # ---------- API (backend) ----------
 FROM base AS api
-# pg_dump / psql 16 (misma versión que el servidor) + cron para respaldos cada 48 h
+# pg_dump / psql 16, 17 y 18 + cron para respaldos cada 48 h.
+# BackupController elige el cliente de la misma versión que el servidor:
+# 16 para la base local del Docker y 17/18 para Neon (pg_dump no respalda servidores más nuevos que él).
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates cron \
     && install -d /usr/share/postgresql-common/pgdg \
     && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 postgresql-client-17 postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer_bin /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/app
@@ -30,10 +32,12 @@ COPY backend/ ./
 RUN composer dump-autoload --no-dev --optimize \
     && mkdir -p storage/logs storage/backups \
     && chown -R www-data:www-data storage \
-    && printf 'SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n0 3 */2 * * www-data . /etc/canariapp.env && /usr/local/bin/php /var/www/app/bin/auto_backup.php >> /var/www/app/storage/logs/auto_backup.log 2>&1\n' > /etc/cron.d/canariapp-backup \
+    && printf 'SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n# Diario 03:00; auto_backup.php solo respalda si pasaron 48 h (margen de 2 h)\n0 3 * * * www-data . /etc/canariapp.env && /usr/local/bin/php /var/www/app/bin/auto_backup.php >> /var/www/app/storage/logs/auto_backup.log 2>&1\n' > /etc/cron.d/canariapp-backup \
     && chmod 0644 /etc/cron.d/canariapp-backup
+COPY docker/api-start.sh /usr/local/bin/canariapp-start
+RUN sed -i 's/\r$//' /usr/local/bin/canariapp-start && chmod 0755 /usr/local/bin/canariapp-start
 ENV DOCROOT=/var/www/app/public
-CMD ["sh", "-c", "mkdir -p /var/www/app/storage/logs /var/www/app/storage/backups && chown -R www-data:www-data /var/www/app/storage && printenv | grep -E '^(DB_|APP_|TZ)' | sed \"s/'/'\\\\''/g; s/=\\(.*\\)/='\\1'/; s/^/export /\" > /etc/canariapp.env && chown root:www-data /etc/canariapp.env && chmod 0640 /etc/canariapp.env && cron && exec apache2-foreground"]
+CMD ["canariapp-start"]
 
 # ---------- WEB (frontend del equipo, desde Figma) ----------
 FROM base AS web

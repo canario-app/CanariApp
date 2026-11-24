@@ -1043,7 +1043,9 @@ Consulta de solo lectura sobre la bitácora inmutable `auditoria` (`SEG-003`, `t
 
 ### 6.5 Respaldos y rotación
 
-Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`). El sistema ejecuta además un respaldo automático cada **2 días (48 horas)** (`id_usuario = null`) mediante `cron` (`php bin/auto_backup.php`) y al consultar la gestión de respaldos si se superó el intervalo. Primero genera el volcado SQL mediante `pg_dump` en `storage/backups/`; si `pg_dump` falla, aborta sin registrar en `respaldo` ni eliminar respaldos previos.
+Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más recientes** (`DAT-003`). El sistema ejecuta además un respaldo automático cada **2 días (48 horas)** (`id_usuario = null`) mediante `cron` (`php bin/auto_backup.php`) y al consultar la gestión de respaldos si se superó el intervalo. Primero genera el volcado SQL mediante `pg_dump` (cliente de la misma versión que el servidor: 16 local, 17/18 Neon) y lo guarda **cifrado con AES-256-GCM** en `storage/backups/` como `.sql.enc` (clave `BACKUP_ENCRYPTION_KEY`, 32+ caracteres; el SQL plano nunca se escribe en disco). Si `pg_dump` o el cifrado fallan, aborta sin registrar en `respaldo` ni eliminar respaldos previos (detalle en `storage/logs/backup.log`).
+
+**Neon / Vercel:** Vercel no tiene `pg_dump` ni disco persistente. La base de Neon la respalda el servicio Docker `respaldo-neon` (perfil `neon` de `compose.yaml`) y se restaura desde ese mismo Docker con `php bin/restore_backup.php`, con el sistema en mantenimiento. Procedimiento completo en [`respaldos_neon.md`](respaldos_neon.md).
 
 #### 1. Listar respaldos vigentes
 
@@ -1070,10 +1072,10 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 |---|---|
 | Método y ruta | `POST /api/v1/admin/respaldos` |
 | Quién puede usarla | Administrador |
-| Campos opcionales | `archivo` (nombre seguro `[A-Za-z0-9._-]+`, máx. 255 chars; si se omite se genera `canariapp_backup_YYYYMMDD_HHMMSS_xxxxxx.sql`), `motivo` |
+| Campos opcionales | `archivo` (nombre seguro `[A-Za-z0-9._-]+`, máx. 247 chars; se le agrega `.sql.enc`; si se omite se genera `canariapp_backup_YYYYMMDD_HHMMSS_xxxxxx.sql.enc`), `motivo` |
 | Ejemplo de petición | `{"motivo": "Respaldo preventivo previo a cierre de temporada"}` |
-| Ejemplo de respuesta | `201` con `data` = `{"respaldo": {...}, "rotados": ["canariapp_backup_...sql"]}` |
-| Errores esperados | `400`, `401`, `403`, `409` nombre de archivo duplicado, `422` nombre inválido, `500` fallo al ejecutar `pg_dump` (no registra ni rota) |
+| Ejemplo de respuesta | `201` con `data` = `{"respaldo": {...}, "rotados": ["canariapp_backup_...sql.enc"]}` |
+| Errores esperados | `400`, `401`, `403`, `409` nombre de archivo duplicado, `422` nombre inválido, `500` fallo al ejecutar `pg_dump` o falta `BACKUP_ENCRYPTION_KEY` (no registra ni rota) |
 
 #### 4. Restaurar respaldo (`SRS-RF029`)
 
@@ -1083,8 +1085,9 @@ Gestiona la tabla `respaldo` conservando únicamente los **7 respaldos más reci
 | Quién puede usarla | Administrador |
 | Campos | `{id}` entero positivo (`id_respaldo`). Cuerpo opcional: `{"motivo": "..."}` |
 | Ejemplo de respuesta | `200` con `data` = `{"respaldo": {...}, "modo_operacion": "mantenimiento", "restaurado": true}` |
-| Errores esperados | `400`, `401`, `403`, `404` respaldo o archivo `.sql` inexistente, `409` el sistema está en modo normal (debe activarse `mantenimiento` o `emergencia` primero), `500` fallo al ejecutar `psql` |
-| Reglas de validación | Rechaza la restauración en modo normal (`RF029`). Ejecuta `psql` utilizando las credenciales del propietario de las tablas (`DB_RESTORE_USER` / `DB_RESTORE_PASS`, por defecto `postgres`) sin otorgar permisos de borrado ni propiedad al usuario de aplicación (`canariapp`) |
+| Errores esperados | `400`, `401`, `403`, `404` respaldo o archivo inexistente (en Vercel siempre: los archivos están en el Docker `respaldo-neon`), `409` el sistema está en modo normal (debe activarse `mantenimiento` o `emergencia` primero), `500` fallo al descifrar o al ejecutar `psql` |
+| Reglas de validación | Rechaza la restauración en modo normal (`RF029`). Descifra el `.sql.enc` en memoria (acepta también `.sql` antiguos sin cifrar) y lo entrega a `psql --single-transaction` utilizando las credenciales del propietario de las tablas (`DB_RESTORE_USER` / `DB_RESTORE_PASS`, por defecto `postgres`; en Neon el dueño de la base) sin otorgar permisos de borrado ni propiedad al usuario de aplicación (`canariapp`) |
+| Restauración de Neon | Desde el PC con el Docker de respaldo: `docker compose --profile neon exec respaldo-neon php bin/restore_backup.php --id=N --admin=correo_admin --motivo="..."` (mismas reglas, queda en `auditoria`) |
 
 ---
 

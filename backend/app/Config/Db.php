@@ -28,7 +28,12 @@ final class Db{
             $user     = \CanariApp\Backend\Config\App::get('db.user');
             $password = \CanariApp\Backend\Config\App::get('db.password');
 
+            $sslmode  = (string) \CanariApp\Backend\Config\App::get('db.sslmode', '');
+
             $dsn = "pgsql:host={$host};port={$port};dbname={$db};";
+            if ($sslmode !== '') {
+                $dsn .= "sslmode={$sslmode};";
+            }
 
             try {
                 self::$connection = new PDO($dsn, $user, $password, [
