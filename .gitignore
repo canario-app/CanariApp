@@ -5,3 +5,6 @@ ACCESO_LOCAL.txt
 .vercel/
 .env.vercel
 ACCESO_VERCEL.txt
+
+# Dependencias de Composer de la raíz (solo las instala Vercel en el build)
+/vendor/

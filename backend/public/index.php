@@ -7,7 +7,12 @@ use CanariApp\Backend\Config\App;
 
 define('BASE_PATH', dirname(__DIR__));
 
-require_once BASE_PATH . '/vendor/autoload.php';
+// Docker/local: backend/vendor. Vercel: vendor/ de la raíz (composer.json de la raíz, lo instala vercel-php).
+$autoload = BASE_PATH . '/vendor/autoload.php';
+if (!is_file($autoload)) {
+    $autoload = dirname(BASE_PATH) . '/vendor/autoload.php';
+}
+require_once $autoload;
 
 try {
     // 1. Cargamos entorno y configuración DENTRO del try
