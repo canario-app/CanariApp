@@ -19,16 +19,13 @@ $sus_parejas = array_filter(parejas_de($k), fn($p) => $p['estado'] !== 'Anulada'
 $el_rol = $rol === 'macho' ? 'el macho' : 'la hembra';
 $verdadero = $rol === 'macho' ? 'el verdadero padre' : 'la verdadera madre';
 // Candidatos para reasignar cada pareja (SRS-RF012 a RF015): mismo sexo, no crías de esa pareja
-// y, si la pareja está activa, sin otra pareja activa (hembra) o con cupo (macho)
+// y, si la pareja está activa, una hembra sin otra pareja activa (el macho no tiene límite, CR-002)
 $candidatos_de = function ($pid, $p) use ($c, $k, $rol) {
     $crias = crias_de_pareja($pid);
     $ops = [];
     foreach (por_sexo($c['sexo'] ?: 'Macho') as $ck => $x) {
         if ($ck === $k || isset($crias[$ck])) continue;
-        if ($p['estado'] === 'Activa') {
-            $act = count(parejas_activas_de($ck));
-            if ($rol === 'hembra' ? $act > 0 : $act >= MAX_PAREJAS_MACHO) continue;
-        }
+        if ($p['estado'] === 'Activa' && $rol === 'hembra' && parejas_activas_de($ck)) continue;
         $ops[$ck] = 'Reasignar a ' . anillo_txt($x);
     }
     return $ops;

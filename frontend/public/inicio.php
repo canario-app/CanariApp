@@ -13,7 +13,7 @@ $pl = fn($n, $uno, $varios) => $n . ' ' . ($n === 1 ? $uno : $varios);
 
 $tarjetas = [
     ['ic-canarios.svg',   'Tiene ' . $pl($n_canarios, 'canario registrado', 'canarios registrados'), 'Registre cada ave con su número de anillo, club, socio y temporada.', 'canarios.php'],
-    ['ic-parejas.svg',    ($n_parejas === 1 ? 'Existe ' : 'Existen ') . $pl($n_parejas, 'pareja', 'parejas') . ' en ' . $pl($n_jaulas, 'jaula', 'jaulas'), 'Forme parejas en su propia jaula, hasta 6 hembras por macho.', 'parejas.php'],
+    ['ic-parejas.svg',    ($n_parejas === 1 ? 'Existe ' : 'Existen ') . $pl($n_parejas, 'pareja', 'parejas') . ' en ' . $pl($n_jaulas, 'jaula', 'jaulas'), 'Forme parejas en su propia jaula, un macho puede tener varias hembras.', 'parejas.php'],
     ['ic-crias.svg',      'Registró ' . $pl($n_crias, 'cría', 'crías'), 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
     ['ic-genealogia.svg', 'Genealogía', 'Se consulta desde la ficha de cada canario: abra un ejemplar para ver sus padres y abuelos.', 'canarios.php'],
     ['ic-titulos.svg',    $pl($n_titulos, 'canario tiene', 'canarios tienen') . ' Títulos de competencia', '', 'titulos.php'],

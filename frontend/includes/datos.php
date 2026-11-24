@@ -7,7 +7,7 @@
  */
 require_once __DIR__ . '/api.php';
 
-const MAX_PAREJAS_MACHO = 6;
+// CR-002: un macho puede tener cualquier cantidad de parejas activas (cada hembra, solo una).
 
 // ---------- Catálogos (club, variedad, mutación) ----------
 // Se piden una vez por sesión y se definen como constantes, igual que antes.

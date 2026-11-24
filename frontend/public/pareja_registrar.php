@@ -12,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $h = canario($v['hembra']);
 
     if (!$m || $m['sexo'] !== 'Macho') $err['macho'] = 'Elija un macho de su criadero.';
-    elseif (count(parejas_activas_de($v['macho'])) >= MAX_PAREJAS_MACHO) $err['macho'] = 'Este macho ya tiene ' . MAX_PAREJAS_MACHO . ' parejas activas. El máximo es ' . MAX_PAREJAS_MACHO . '.';
 
     if (!$h || $h['sexo'] !== 'Hembra') $err['hembra'] = 'Elija una hembra de su criadero.';
     elseif ($act = parejas_activas_de($v['hembra'])) $err['hembra'] = 'Esta hembra ya tiene una pareja activa (jaula ' . current($act)['jaula'] . ').';
@@ -90,7 +89,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <h3>Reglas para formar una pareja</h3>
       <ul class="reglas">
         <li><?= icono('check') ?> Un macho y una hembra, ambos con sexo registrado.</li>
-        <li><?= icono('check') ?> Un macho puede tener hasta <?= MAX_PAREJAS_MACHO ?> parejas activas.</li>
+        <li><?= icono('check') ?> Un macho puede tener varias parejas activas, sin límite.</li>
         <li><?= icono('check') ?> Una hembra solo puede tener una pareja activa.</li>
         <li><?= icono('check') ?> Cada jaula admite una sola pareja activa.</li>
       </ul>
@@ -105,9 +104,9 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 
 <script>
   // Muestra cuántas parejas activas tiene el macho elegido
-  const activas = <?= json_encode($activasMacho) ?>, max = <?= MAX_PAREJAS_MACHO ?>;
+  const activas = <?= json_encode($activasMacho) ?>;
   const sel = document.getElementById('macho'), ayuda = document.getElementById('ayudaMacho');
-  const upd = () => { if (!ayuda) return; const n = activas[sel.value]; ayuda.textContent = sel.value ? `${n} de ${max} parejas activas · puede formar ${max - n} más` : ''; };
+  const upd = () => { if (!ayuda) return; const n = activas[sel.value]; ayuda.textContent = sel.value ? `${n} pareja${n === 1 ? '' : 's'} activa${n === 1 ? '' : 's'}` : ''; };
   sel.addEventListener('change', upd); upd();
 </script>
 
