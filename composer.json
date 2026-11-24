@@ -1,0 +1,21 @@
+{
+    "name": "canariapp/vercel",
+    "description": "Solo para el despliegue en Vercel: vercel-php instala estas dependencias en vendor/ de la raiz. Docker y desarrollo local usan backend/composer.json. Mantener las mismas versiones que backend/composer.lock.",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "bramus/router": "1.6.1",
+        "vlucas/phpdotenv": "5.8.0",
+        "firebase/php-jwt": "7.2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "CanariApp\\Backend\\": "backend/app/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
