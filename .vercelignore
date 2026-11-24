@@ -10,6 +10,8 @@ docker
 compose.yaml
 *.cmd
 *.png
+# Las imágenes del sitio sí se publican (ilustración del inicio, canarios-rama.png)
+!frontend/public/img/*.png
 *.drawio
 *.docx
 *.xlsx
