@@ -23,6 +23,7 @@ function api_subir($ruta, $tmp, $nombre) {
         CURLOPT_POSTFIELDS => ['archivo' => new CURLFile($tmp, null, $nombre)],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 30,
+        CURLOPT_HEADERFUNCTION => 'api_capturar_token',
     ]);
     $raw = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

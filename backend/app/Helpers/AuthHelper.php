@@ -41,14 +41,17 @@ class AuthHelper {
 
     /**
      * Genera un token JWT incluyendo el ID, correo y rol del usuario.
+     * $sessionId (claim jti) identifica la sesión: se conserva al renovar el token.
      */
-    public static function generateToken(int|string $userId, string $correo, string $rol): string {
+    public static function generateToken(int|string $userId, string $correo, string $rol, ?string $sessionId = null): string {
         $secret = self::getJwtSecret();
         $issuedAt = time();
         $expirationTime = $issuedAt + self::getTokenExpiration();
 
         $payload = [
-            'jti'    => bin2hex(random_bytes(16)),
+            'jti'    => $sessionId !== null && preg_match('/^[a-f0-9]{32}$/', $sessionId) === 1
+                ? $sessionId
+                : bin2hex(random_bytes(16)),
             'iat'    => $issuedAt,
             'exp'    => $expirationTime,
             'sub'    => $userId,
@@ -60,6 +63,24 @@ class AuthHelper {
     }
 
     /**
+     * Renueva un token válido (SEG-004: cierre tras 30 minutos SIN ACTIVIDAD).
+     * El nuevo token vence JWT_EXPIRATION segundos después de este uso y conserva
+     * la misma sesión (jti), de modo que el cierre de sesión revoca todos sus tokens.
+     */
+    public static function renewToken(object $payload): ?string {
+        if (!isset($payload->sub, $payload->correo, $payload->rol)) {
+            return null;
+        }
+
+        return self::generateToken(
+            $payload->sub,
+            (string) $payload->correo,
+            (string) $payload->rol,
+            isset($payload->jti) ? (string) $payload->jti : null
+        );
+    }
+
+    /**
      * Valida un token JWT. Retorna el payload si es válido, o null si fue alterado, expiró o cerró sesión.
      */
     public static function validateToken(string $token): ?object {
@@ -67,7 +88,8 @@ class AuthHelper {
             $secret = self::getJwtSecret();
             $decoded = JWT::decode($token, new Key($secret, 'HS256'));
 
-            if (self::isTokenRevoked($token)) {
+            $sessionId = isset($decoded->jti) ? (string) $decoded->jti : null;
+            if (self::isTokenRevoked($token, $sessionId)) {
                 return null;
             }
 
@@ -78,36 +100,45 @@ class AuthHelper {
     }
 
     /**
-     * Registra el cierre de sesión en auditoria invalidando el hash SHA-256 del token actual.
+     * Registra el cierre de sesión en auditoria. Guarda el hash SHA-256 de la sesión (jti),
+     * que invalida el token actual y todos los renovados de la misma sesión; sin jti,
+     * guarda el hash del token como antes.
      */
-    public static function revokeToken(string $token, int $userId): void {
+    public static function revokeToken(string $token, int $userId, ?string $sessionId = null): void {
         AuditHelper::log(
             action: 'logout',
             entity: 'sesion',
             recordId: $userId,
-            newValue: hash('sha256', $token),
+            newValue: $sessionId !== null && $sessionId !== ''
+                ? self::sessionHash($sessionId)
+                : hash('sha256', $token),
             reason: 'Cierre de sesión de usuario',
             userId: $userId
         );
     }
 
     /**
-     * Comprueba en auditoria si el token fue revocado mediante cierre de sesión.
+     * Comprueba en auditoria si el token, o su sesión (jti), fue revocado mediante cierre de sesión.
      */
-    public static function isTokenRevoked(string $token): bool {
+    public static function isTokenRevoked(string $token, ?string $sessionId = null): bool {
         $db = Db::getConnection();
 
         $stmt = $db->prepare(
             "SELECT 1 FROM auditoria
              WHERE accion = 'logout'
                AND entidad = 'sesion'
-               AND valor_nuevo = :token_hash
+               AND valor_nuevo IN (:token_hash, :session_hash)
              LIMIT 1"
         );
         $stmt->execute([
-            'token_hash' => hash('sha256', $token),
+            'token_hash'   => hash('sha256', $token),
+            'session_hash' => $sessionId !== null && $sessionId !== '' ? self::sessionHash($sessionId) : hash('sha256', $token),
         ]);
 
         return $stmt->fetchColumn() !== false;
+    }
+
+    private static function sessionHash(string $sessionId): string {
+        return hash('sha256', 'jti:' . $sessionId);
     }
 }
