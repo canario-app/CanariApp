@@ -3,7 +3,7 @@ require_once __DIR__ . '/../includes/config.php';
 requerir_login();
 
 $anio = (int)date('Y');
-$v = ['numero' => $_GET['numero'] ?? '', 'club' => 'SOCH', 'socio' => mi_socio(), 'temp' => (string)$anio, 'sexo' => '', 'variedad' => ''];
+$v = ['numero' => $_GET['numero'] ?? '', 'club' => 'SOCH', 'socio' => mi_socio(), 'temp' => (string)$anio, 'sexo' => '', 'variedad' => $_GET['variedad'] ?? ''];
 $v = array_merge($v, array_intersect_key(post_previo(), $v));
 $err = [];
 $duplicado = false;
@@ -100,11 +100,11 @@ $msg = fn($campo, $ayuda = '') => isset($err[$campo]) ? '<span class="msg-error"
         <label for="variedad">Variedad del nomenclador</label>
         <div class="input-icono izq">
           <?= str_replace('class="ico"', 'class="ico" style="position:absolute;left:12px;top:12px"', icono('buscar')) ?>
-          <input class="input" id="variedad" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Ej.: CC033" style="padding-left:36px" value="<?= e($v['variedad']) ?>">
+          <input class="input" id="variedad" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Ej.: D.033 o lutino" style="padding-left:36px" value="<?= e($v['variedad']) ?>">
         </div>
         <?= datalist_variedades() ?>
         <?= $msg('variedad') ?>
-        <span class="ayuda-campo">Escriba el código o el nombre y elija de la lista.</span>
+        <span class="ayuda-campo">Escriba el código o parte del nombre y elija de la lista. ¿No la encuentra? <a href="nomenclador.php" target="_blank" style="text-decoration:underline">Ver el nomenclador completo</a></span>
       </div>
     </section>
 

@@ -90,7 +90,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <ul class="reglas">
         <li><?= icono('check') ?> Un macho y una hembra, ambos con sexo registrado.</li>
         <li><?= icono('check') ?> Un macho puede tener varias parejas activas, sin límite.</li>
-        <li><?= icono('check') ?> Una hembra solo puede tener una pareja activa.</li>
+        <li><?= icono('check') ?> Una hembra solo puede tener una pareja activa a la vez. Para juntarla con otro macho, primero finalice la pareja anterior.</li>
         <li><?= icono('check') ?> Cada jaula admite una sola pareja activa.</li>
       </ul>
       <p class="muted" style="margin-top:auto;border-top:1px solid var(--gris-borde);padding-top:12px">Jaulas ocupadas ahora: <strong style="color:var(--negro)"><?= e(implode(', ', jaulas_ocupadas()) ?: 'ninguna') ?></strong></p>

@@ -4,17 +4,14 @@ $titulo = 'Inicio';
 include __DIR__ . '/../includes/header.php';
 
 $n_canarios = count(canarios());
-$n_parejas  = count(array_filter(parejas(), fn($p) => $p['estado'] === 'Activa'));
-$n_jaulas   = count(jaulas_ocupadas());
-$n_crias    = count(array_filter(canarios(), fn($c) => $c['nidada']));
 $n_titulos  = count(array_unique(array_column(titulos(), 'canario')));
 $n_revision = count(array_filter(canarios(), fn($c) => $c['estado'] === 'revision'));
 $pl = fn($n, $uno, $varios) => $n . ' ' . ($n === 1 ? $uno : $varios);
 
 $tarjetas = [
     ['ic-canarios.svg',   'Tiene ' . $pl($n_canarios, 'canario registrado', 'canarios registrados'), 'Registre cada ave con su número de anillo, club, socio y temporada.', 'canarios.php'],
-    ['ic-parejas.svg',    ($n_parejas === 1 ? 'Existe ' : 'Existen ') . $pl($n_parejas, 'pareja', 'parejas') . ' en ' . $pl($n_jaulas, 'jaula', 'jaulas'), 'Forme parejas en su propia jaula, un macho puede tener varias hembras.', 'parejas.php'],
-    ['ic-crias.svg',      'Registró ' . $pl($n_crias, 'cría', 'crías'), 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
+    ['ic-parejas.svg',    'Libro de cría', 'Forme parejas en su propia jaula. Un macho puede tener varias hembras; una hembra, una pareja activa a la vez.', 'parejas.php'],
+    ['ic-crias.svg',      'Registro de crías', 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
     ['ic-genealogia.svg', 'Genealogía', 'Se consulta desde la ficha de cada canario: abra un ejemplar para ver sus padres y abuelos.', 'canarios.php'],
     ['ic-titulos.svg',    $pl($n_titulos, 'canario tiene', 'canarios tienen') . ' Títulos de competencia', '', 'titulos.php'],
     ['ic-simulador.svg',  'Simulador genético', 'Calcule la proporción esperada de crías según la Ley de Mendel.', 'simulador.php'],

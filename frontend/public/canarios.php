@@ -65,7 +65,10 @@ $estados = [
     <h1 class="titulo-l">Canarios</h1>
     <p class="bajada">Todos los ejemplares de su criadero con su anillo, sexo, variedad y marcas.</p>
   </div>
-  <a href="canario_registrar.php" class="btn btn-primario"><?= icono('mas') ?> Registrar ejemplar</a>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="nomenclador.php" class="btn"><?= icono('buscar') ?> Nomenclador</a>
+    <a href="canario_registrar.php" class="btn btn-primario"><?= icono('mas') ?> Registrar ejemplar</a>
+  </div>
 </div>
 
 <div class="stats">
