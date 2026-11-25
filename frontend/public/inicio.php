@@ -3,15 +3,13 @@ $pagina = 'inicio';
 $titulo = 'Inicio';
 include __DIR__ . '/../includes/header.php';
 
-$n_canarios = count(canarios());
-$n_titulos  = count(array_unique(array_column(titulos(), 'canario')));
+// Sin contadores en las tarjetas (pedido del cliente); solo el aviso de revisión usa un número
 $n_revision = count(array_filter(canarios(), fn($c) => $c['estado'] === 'revision'));
-$pl = fn($n, $uno, $varios) => $n . ' ' . ($n === 1 ? $uno : $varios);
 
 $tarjetas = [
-    ['ic-canarios.svg',   'Canarios: ' . $pl($n_canarios, 'registrado', 'registrados'), 'Registre cada ave con su anillo, club, socio y temporada. Abra un ejemplar para ver su genealogía y logros.', 'canarios.php'],
-    ['ic-parejas.svg',    'Libro de cría', 'Forme parejas en su jaula, anote nidadas y crías, y busque todo lo que hay en cada jaula.', 'parejas.php'],
-    ['ic-titulos.svg',    'Títulos de competencia', $pl($n_titulos, 'canario tiene títulos registrados.', 'canarios tienen títulos registrados.'), 'titulos.php'],
+    ['ic-canarios.svg',   'Canarios', 'Registre cada ave con su anillo, club, socio y temporada. Abra un ejemplar para ver su genealogía y logros.', 'canarios.php'],
+    ['ic-parejas.svg',    'Libro de cría', 'Forme parejas en su jaula, registre los cruces y lleve el registro de crías de cada nidada.', 'parejas.php'],
+    ['ic-titulos.svg',    'Títulos de competencia', 'Registre los títulos que ganan sus ejemplares y vea las crías de sus campeones.', 'titulos.php'],
     ['ic-simulador.svg',  'Simulador genético', 'Calcule la proporción esperada de crías según la Ley de Mendel.', 'simulador.php'],
 ];
 ?>

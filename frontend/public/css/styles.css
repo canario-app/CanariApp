@@ -49,6 +49,18 @@ button, input, select { font: inherit; color: inherit; }
 }
 .nav a:hover { background: var(--gris-fondo); }
 .nav a.activo { background: var(--gris-fondo); font-weight: 600; }
+.nav-subs { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.nav-titulo { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-radius: var(--radio); cursor: pointer; list-style: none; user-select: none; }
+.nav-titulo::-webkit-details-marker { display: none; }
+.nav-titulo:hover { background: var(--gris-fondo); }
+.nav-flecha { transition: transform .2s; flex-shrink: 0; }
+.nav-grupo[open] .nav-flecha { transform: rotate(180deg); }
+.nav-grupo.abierto .nav-titulo { font-weight: 600; }
+.nav a.nav-sub { height: 36px; margin-left: 12px; padding-left: 14px; border-left: 2px solid var(--gris-borde); border-radius: 0 var(--radio) var(--radio) 0; font-size: 15px; }
+/* Buscador con selector «Buscar por» pegado al campo */
+.buscar-por { display: flex; }
+.buscar-por select { width: 120px; border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+.buscar-por .input-icono input { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .etapa { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; color: var(--gris-texto); font-size: 14px; }
 
 .contenido { flex: 1; min-width: 0; padding: 48px; display: flex; flex-direction: column; gap: 24px; }

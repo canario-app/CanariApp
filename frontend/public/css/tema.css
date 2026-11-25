@@ -26,7 +26,7 @@ body { background: var(--crema); }
 
 /* Menú lateral */
 .sidebar { border-right-color: #e2d6b5; }
-.nav a:hover { background: #e9dcb9; }
+.nav a:hover, .nav-titulo:hover { background: #e9dcb9; }
 .nav a.activo { background: var(--verde-claro); color: var(--negro); }
 
 /* Tarjetas en marfil (el blanco puro se veía frío sobre el fondo crema) */
@@ -158,8 +158,9 @@ a.card:hover { border-color: #9BC556; }
 [data-tema="oscuro"] .topbar .btn, [data-tema="oscuro"] .topbar .menu-btn { border-color: #484848; color: #FFFFFF; }
 [data-tema="oscuro"] .topbar .btn:hover { background: #484848; }
 [data-tema="oscuro"] .sidebar { background: #363636; border-right-color: #484848; }
-[data-tema="oscuro"] .nav a { color: #9E9E9E; }
-[data-tema="oscuro"] .nav a:hover { background: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .nav a, [data-tema="oscuro"] .nav-titulo { color: #9E9E9E; }
+[data-tema="oscuro"] .nav a:hover, [data-tema="oscuro"] .nav-titulo:hover { background: #484848; color: #FFFFFF; }
+[data-tema="oscuro"] .nav-grupo.abierto .nav-titulo { color: #FFFFFF; }
 [data-tema="oscuro"] .nav a.activo { background: var(--acento); color: #212121; }
 [data-tema="oscuro"] .card, [data-tema="oscuro"] .panel, [data-tema="oscuro"] .seccion, [data-tema="oscuro"] .stat { background: #363636; border-color: #484848; box-shadow: none; }
 [data-tema="oscuro"] a.card:hover { border-color: var(--acento); }
