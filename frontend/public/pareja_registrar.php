@@ -29,11 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Cada canario se muestra con su nomenclatura (variedad), para poder elegir por tipo
+$conVariedad = fn($c) => anillo_txt($c) . ' — ' . ($c['variedad'] ? variedad_txt($c['variedad']) : 'variedad pendiente');
 $opMachos = $opHembras = [];
-foreach (por_sexo('Macho') as $k => $c) $opMachos[$k] = anillo_txt($c);
+foreach (por_sexo('Macho') as $k => $c) $opMachos[$k] = $conVariedad($c);
 foreach (por_sexo('Hembra') as $k => $c) {
     $act = parejas_activas_de($k);
-    $opHembras[$k] = anillo_txt($c) . ($act ? ' (en jaula ' . current($act)['jaula'] . ')' : '');
+    $opHembras[$k] = $conVariedad($c) . ($act ? ' (en jaula ' . current($act)['jaula'] . ')' : '');
 }
 // cuántas parejas activas tiene cada macho (para el texto de ayuda en vivo)
 $activasMacho = array_map(fn($k) => count(parejas_activas_de($k)), array_combine(array_keys($opMachos), array_keys($opMachos)));
@@ -44,9 +46,9 @@ include __DIR__ . '/../includes/header.php';
 $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$campo]) . '</span>' : '';
 ?>
 
-<p class="migas"><a href="parejas.php">Parejas y cruces</a> / Registrar pareja</p>
+<p class="migas"><a href="parejas.php">Libro de cría</a> / Registrar pareja</p>
 <div>
-  <p class="eyebrow">Parejas y cruces</p>
+  <p class="eyebrow">Libro de cría</p>
   <h1 class="titulo-l">Registrar pareja</h1>
   <p class="bajada">Elija un macho y una hembra de su criadero y asígneles una jaula libre.</p>
 </div>
@@ -61,6 +63,16 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
     <section class="seccion" style="min-height:400px">
       <h2 style="font-size:16px">Datos de la pareja</h2>
       <div class="dos-col-igual" style="gap:16px">
+        <div class="campo">
+          <label for="nom-macho">Nomenclatura del macho</label>
+          <input class="input filtro-nom" id="nom-macho" data-variedades data-para="macho" autocomplete="off" placeholder="Código o nombre, ej.: D.017 o lutino">
+          <span class="ayuda-campo" id="cuenta-macho">Opcional: filtra sus machos por variedad.</span>
+        </div>
+        <div class="campo">
+          <label for="nom-hembra">Nomenclatura de la hembra</label>
+          <input class="input filtro-nom" id="nom-hembra" data-variedades data-para="hembra" autocomplete="off" placeholder="Código o nombre, ej.: D.003 o amarillo">
+          <span class="ayuda-campo" id="cuenta-hembra">Opcional: filtra sus hembras por variedad.</span>
+        </div>
         <div class="campo<?= isset($err['macho']) ? ' error' : '' ?>">
           <label for="macho">Macho</label>
           <select class="input" id="macho" name="macho"><?= select_opciones($opMachos, $v['macho'], 'Elija un macho') ?></select>
@@ -71,6 +83,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
           <select class="input" id="hembra" name="hembra"><?= select_opciones($opHembras, $v['hembra'], 'Elija una hembra') ?></select>
           <?= $msg('hembra') ?>
         </div>
+        <?= datalist_variedades() ?>
         <div class="campo<?= isset($err['jaula']) ? ' error' : '' ?>">
           <label for="jaula">Número de jaula</label>
           <input class="input" id="jaula" name="jaula" inputmode="numeric" placeholder="Ej.: 5" value="<?= e($v['jaula']) ?>">
@@ -89,6 +102,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <h3>Reglas para formar una pareja</h3>
       <ul class="reglas">
         <li><?= icono('check') ?> Un macho y una hembra, ambos con sexo registrado.</li>
+        <li><?= icono('check') ?> Puede elegir la nomenclatura para ver solo sus canarios registrados de esa variedad.</li>
         <li><?= icono('check') ?> Un macho puede tener varias parejas activas, sin límite.</li>
         <li><?= icono('check') ?> Una hembra solo puede tener una pareja activa a la vez. Para juntarla con otro macho, primero finalice la pareja anterior.</li>
         <li><?= icono('check') ?> Cada jaula admite una sola pareja activa.</li>
@@ -108,6 +122,36 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
   const sel = document.getElementById('macho'), ayuda = document.getElementById('ayudaMacho');
   const upd = () => { if (!ayuda) return; const n = activas[sel.value]; ayuda.textContent = sel.value ? `${n} pareja${n === 1 ? '' : 's'} activa${n === 1 ? '' : 's'}` : ''; };
   sel.addEventListener('change', upd); upd();
+
+  // Filtro por nomenclatura: reduce la lista de machos/hembras a los de esa variedad.
+  // Se reconstruyen las <option> (ocultarlas con CSS no funciona en Safari/iPhone).
+  const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  document.querySelectorAll('.filtro-nom').forEach(inp => {
+    const s = document.getElementById(inp.dataset.para);
+    const cuenta = document.getElementById('cuenta-' + inp.dataset.para);
+    const textoInicial = cuenta.textContent;
+    const todas = [...s.options].map(o => ({ v: o.value, t: o.textContent }));
+    const [vacia, ...aves] = todas;
+    const nombre = inp.dataset.para === 'macho' ? ['macho', 'machos'] : ['hembra', 'hembras'];
+    const filtrar = () => {
+      const q = norm(inp.value.trim());
+      // si eligió una variedad de la lista («D.017 · LUTINO…»), se filtra por el código exacto
+      const cod = /^[a-z]\.\d+ · /.test(q) ? q.split(' · ')[0] + ' · ' : null;
+      const palabras = q.split(/\s+/).filter(Boolean);
+      const sirve = a => !q || (cod ? norm(a.t).includes('— ' + cod) : palabras.every(p => norm(a.t.split(' — ')[1] || '').includes(p)));
+      const elegido = s.value;
+      const quedan = aves.filter(sirve);
+      s.replaceChildren(...[vacia, ...quedan].map(a => new Option(a.t, a.v)));
+      s.value = quedan.some(a => a.v === elegido) ? elegido : (quedan.length === 1 ? quedan[0].v : '');
+      s.dispatchEvent(new Event('change'));
+      cuenta.textContent = !q ? textoInicial
+        : quedan.length ? `${quedan.length} ${nombre[quedan.length === 1 ? 0 : 1]} de esa variedad.`
+        : `No tiene ${nombre[1]} de esa variedad. Solo se pueden usar canarios registrados.`;
+      cuenta.classList.toggle('msg-error', !!q && !quedan.length);
+    };
+    inp.addEventListener('input', filtrar);
+    inp.addEventListener('change', filtrar);
+  });
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
