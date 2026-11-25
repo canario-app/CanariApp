@@ -8,8 +8,7 @@ $n_revision = count(array_filter(canarios(), fn($c) => $c['estado'] === 'revisio
 
 $tarjetas = [
     ['ic-canarios.svg',   'Canarios', 'Registre cada ave con su anillo, club, socio y temporada. Abra un ejemplar para ver su genealogía y logros.', 'canarios.php'],
-    ['ic-parejas.svg',    'Libro de cría', 'Forme parejas en su jaula, registre los cruces y busque todo lo que hay en cada jaula.', 'parejas.php'],
-    ['ic-crias.svg',      'Registro de crías', 'Anote cada nidada y el sexo de las crías cuando nacen.', 'crias.php'],
+    ['ic-parejas.svg',    'Libro de cría', 'Forme parejas en su jaula, registre los cruces y lleve el registro de crías de cada nidada.', 'parejas.php'],
     ['ic-titulos.svg',    'Títulos de competencia', 'Registre los títulos que ganan sus ejemplares y vea las crías de sus campeones.', 'titulos.php'],
     ['ic-simulador.svg',  'Simulador genético', 'Calcule la proporción esperada de crías según la Ley de Mendel.', 'simulador.php'],
 ];
@@ -33,7 +32,7 @@ $tarjetas = [
     <p class="eyebrow">Qué puede hacer</p>
     <h2 class="titulo-m" style="margin-top:8px">Todo el registro de su crianza</h2>
   </div>
-  <div class="grid-3">
+  <div class="grid-2">
     <?php foreach ($tarjetas as [$icono, $titulo_t, $texto, $url]): ?>
       <a href="<?= $url ?>" class="card feature">
         <div class="icono-caja"><span class="ico-img" style="-webkit-mask-image:url(img/<?= e($icono) ?>);mask-image:url(img/<?= e($icono) ?>)" aria-hidden="true"></span></div>
