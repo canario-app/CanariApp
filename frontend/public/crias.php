@@ -104,7 +104,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
 
 <div class="page-head">
   <div>
-    <p class="eyebrow">Crías y descendencia</p>
+    <p class="eyebrow">Registro de crías</p>
     <h1 class="titulo-l">Nidadas y crías</h1>
     <p class="bajada">Registre cada nidada a partir del cruce de una pareja y complete el sexo y la variedad de las crías cuando los conozca.</p>
   </div>

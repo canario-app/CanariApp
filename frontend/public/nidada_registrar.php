@@ -90,7 +90,7 @@ $temps = array_map('strval', range($anio, $anio - 3));
 
 <p class="migas"><a href="crias.php">Crías</a> / Registrar nidada</p>
 <div>
-  <p class="eyebrow">Crías y descendencia</p>
+  <p class="eyebrow">Registro de crías</p>
   <h1 class="titulo-l">Registrar nidada</h1>
   <p class="bajada">Asocie la nidada al cruce de una pareja e ingrese el anillo de cada cría.</p>
 </div>

@@ -13,26 +13,25 @@ $anuladas = $cuenta['Anulada'] ?? 0;
 $tab = $_GET['tab'] ?? 'Todas';
 $q = trim($_GET['q'] ?? '');
 $f_temp = $_GET['temporada'] ?? '';
+// «Buscar por»: se elige antes si el número es un anillo o una jaula.
+// (Se mantiene «jaula 4» escrito a mano por si alguien guardó un enlace antiguo.)
+$por = ($_GET['por'] ?? '') === 'jaula' || stripos($q, 'jaula') !== false ? 'jaula' : 'anillo';
+$num = preg_replace('/\D/', '', $q);
 
-$lista = array_filter($todas, function ($p) use ($tab, $q, $f_temp) {
+$lista = array_filter($todas, function ($p) use ($tab, $q, $num, $por, $f_temp) {
     if ($tab !== 'Todas' && $p['estado'] !== $tab) return false;
-    $m = canario($p['macho']); $h = canario($p['hembra']);
     if ($q !== '') {
-        $num = preg_replace('/\D/', '', $q);
-        $esJaula = stripos($q, 'jaula') !== false;
-        $ok = $esJaula ? (string)$p['jaula'] === $num
-                       : ($num !== '' && (str_starts_with((string)$m['numero'], $num) || str_starts_with((string)$h['numero'], $num) || (string)$p['jaula'] === $num));
+        if ($num === '') return false;
+        $m = canario($p['macho']); $h = canario($p['hembra']);
+        $ok = $por === 'jaula' ? (string)$p['jaula'] === $num
+                               : (str_starts_with((string)$m['numero'], $num) || str_starts_with((string)$h['numero'], $num));
         if (!$ok) return false;
     }
     if ($f_temp !== '' && substr($p['desde'], 0, 4) !== $f_temp) return false;
     return true;
 });
 // Búsqueda por jaula: todo lo que hubo en ella (parejas de cualquier estado, nidadas y crías)
-$jaula_q = null;
-if ($q !== '') {
-    $num = preg_replace('/\D/', '', $q);
-    if ($num !== '' && (stripos($q, 'jaula') !== false || in_array($num, array_map('strval', array_column($todas, 'jaula')), true))) $jaula_q = $num;
-}
+$jaula_q = ($por === 'jaula' && $num !== '') ? $num : null;
 $en_jaula = [];
 if ($jaula_q !== null) {
     foreach ($todas as $pid => $p) {
@@ -71,17 +70,23 @@ $tabTxt = ['Todas' => 'Todas', 'Activa' => 'Activas', 'Finalizada' => 'Finalizad
 <div class="panel">
   <nav class="tabs">
     <?php foreach ($tabs as $t => $n): ?>
-      <a href="?<?= e(http_build_query(['tab' => $t, 'q' => $q, 'temporada' => $f_temp])) ?>" class="<?= $tab === $t ? 'activo' : '' ?>"><?= $tabTxt[$t] ?> (<?= $n ?>)</a>
+      <a href="?<?= e(http_build_query(['tab' => $t, 'por' => $por, 'q' => $q, 'temporada' => $f_temp])) ?>" class="<?= $tab === $t ? 'activo' : '' ?>"><?= $tabTxt[$t] ?> (<?= $n ?>)</a>
     <?php endforeach; ?>
   </nav>
 
   <form class="filtros-campos" method="GET">
     <input type="hidden" name="tab" value="<?= e($tab) ?>">
     <div class="campo">
-      <label for="q">Buscar por anillo o jaula</label>
-      <div class="input-icono izq">
-        <?= str_replace('class="ico"', 'class="ico" style="position:absolute;left:12px;top:12px"', icono('buscar')) ?>
-        <input class="input" id="q" name="q" placeholder="Ej.: 2901 o jaula 4" style="width:300px;padding-left:36px" value="<?= e($q) ?>">
+      <label for="q">Buscar</label>
+      <div class="buscar-por">
+        <select class="input" id="por" name="por" aria-label="Buscar por">
+          <option value="anillo"<?= $por === 'anillo' ? ' selected' : '' ?>>Anillo</option>
+          <option value="jaula"<?= $por === 'jaula' ? ' selected' : '' ?>>Jaula</option>
+        </select>
+        <div class="input-icono izq">
+          <?= str_replace('class="ico"', 'class="ico" style="position:absolute;left:12px;top:12px"', icono('buscar')) ?>
+          <input class="input" id="q" name="q" inputmode="numeric" placeholder="<?= $por === 'jaula' ? 'N.° de jaula, ej.: 4' : 'N.° de anillo, ej.: 2901' ?>" style="width:240px;padding-left:36px" value="<?= e($num) ?>">
+        </div>
       </div>
     </div>
     <div class="campo">
@@ -91,6 +96,15 @@ $tabTxt = ['Todas' => 'Todas', 'Activa' => 'Activas', 'Finalizada' => 'Finalizad
       </select>
     </div>
   </form>
+  <script>
+    (() => {
+      const por = document.getElementById('por'), q = document.getElementById('q');
+      por.addEventListener('change', () => {
+        q.placeholder = por.value === 'jaula' ? 'N.° de jaula, ej.: 4' : 'N.° de anillo, ej.: 2901';
+        if (q.value.trim()) por.form.submit(); else q.focus();
+      });
+    })();
+  </script>
 
   <?php if ($jaula_q !== null): $n_crias = array_sum(array_map(fn($x) => count($x[4]), $en_jaula)); ?>
     <section class="card" style="display:flex;flex-direction:column;gap:12px">

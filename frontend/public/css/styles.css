@@ -49,6 +49,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 .nav a:hover { background: var(--gris-fondo); }
 .nav a.activo { background: var(--gris-fondo); font-weight: 600; }
+.nav-grupo { display: flex; flex-direction: column; gap: 2px; }
+.nav-titulo { height: 40px; display: flex; align-items: center; padding: 0 12px; }
+.nav-grupo.abierto .nav-titulo { font-weight: 600; }
+.nav a.nav-sub { height: 36px; margin-left: 12px; padding-left: 14px; border-left: 2px solid var(--gris-borde); border-radius: 0 var(--radio) var(--radio) 0; font-size: 15px; }
+/* Buscador con selector «Buscar por» pegado al campo */
+.buscar-por { display: flex; }
+.buscar-por select { width: 120px; border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+.buscar-por .input-icono input { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .etapa { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; color: var(--gris-texto); font-size: 14px; }
 
 .contenido { flex: 1; min-width: 0; padding: 48px; display: flex; flex-direction: column; gap: 24px; }
