@@ -40,6 +40,9 @@ $en_revision = count(array_filter($todos, fn($c) => $c['estado'] === 'revision')
 $temporadas = array_unique(array_column($todos, 'temp'));
 rsort($temporadas);
 
+// Buscador de anillo: si el número coincide exacto, se muestra su genealogía y logros
+$exactos = $f_anillo !== '' ? array_filter($todos, fn($c) => (string)$c['numero'] === $f_anillo) : [];
+
 $chips = ['todos' => 'Todos', 'portadoras' => 'Portadoras', 'reservadas' => 'Reservadas', 'pendientes' => 'Pendientes', 'revision' => 'Requiere revisión'];
 $estados = [
     'revision'   => '<span class="badge badge-oscuro">Requiere revisión</span>',
@@ -65,7 +68,10 @@ $estados = [
     <h1 class="titulo-l">Canarios</h1>
     <p class="bajada">Todos los ejemplares de su criadero con su anillo, sexo, variedad y marcas.</p>
   </div>
-  <a href="canario_registrar.php" class="btn btn-primario"><?= icono('mas') ?> Registrar ejemplar</a>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="nomenclador.php" class="btn"><?= icono('buscar') ?> Nomenclador</a>
+    <a href="canario_registrar.php" class="btn btn-primario"><?= icono('mas') ?> Registrar ejemplar</a>
+  </div>
 </div>
 
 <div class="stats">
@@ -74,6 +80,39 @@ $estados = [
   <div class="stat"><span>Hembras</span><strong><?= $hembras ?></strong></div>
   <div class="stat"><span>Pendientes de datos</span><strong><?= $pendientes ?></strong></div>
 </div>
+
+<?php foreach ($exactos as $ek => $ec):
+  $ep = canario($ec['padre'] ?? ''); $em = canario($ec['madre'] ?? '');
+  $abu = array_filter([$ep ? canario($ep['padre'] ?? '') : null, $ep ? canario($ep['madre'] ?? '') : null, $em ? canario($em['padre'] ?? '') : null, $em ? canario($em['madre'] ?? '') : null]);
+  $et = titulos_de($ek);
+  $ecrias = array_filter($todos, fn($x) => ($x['padre'] ?? '') === $ek || ($x['madre'] ?? '') === $ek);
+  $ecrias_tit = array_filter(array_keys($ecrias), fn($ck) => titulos_de($ck));
+  $lnk = fn($x) => $x ? '<a href="canario_ficha.php?id=' . e(urlencode(clave($x))) . '">' . anillo_html($x) . '</a>' : '<span class="muted">No registrado</span>';
+?>
+<section class="card resultado-anillo" style="margin-bottom:16px;display:flex;flex-direction:column;gap:14px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+    <div>
+      <p class="eyebrow">Resultado del anillo</p>
+      <div style="font-size:22px;margin-top:4px"><?= anillo_html($ec, true) ?></div>
+      <div class="badges" style="margin-top:6px"><?= badges_canario($ec) ?></div>
+    </div>
+    <a href="canario_ficha.php?id=<?= e(urlencode($ek)) ?>" class="btn btn-primario">Ver ficha completa <?= icono('chevron', 12) ?></a>
+  </div>
+  <div class="kv">
+    <div><span>Padre</span><?= $lnk($ep) ?></div>
+    <div><span>Madre</span><?= $lnk($em) ?></div>
+    <div><span>Abuelos registrados</span><?= count($abu) ?> de 4</div>
+    <div><span>Crías</span><?= count($ecrias) ?><?= $ecrias_tit ? ' · ' . count($ecrias_tit) . ' con título' : '' ?></div>
+  </div>
+  <div>
+    <span class="small muted">Logros</span>
+    <?php if (!$et): ?><p class="small muted">Sin títulos registrados.</p><?php endif; ?>
+    <?php foreach ($et as $t): ?>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:14px"><?= icono('trofeo') ?> <strong><?= e($t['nombre']) ?></strong> <span class="muted"><?= e(fecha($t['fecha'])) ?></span></div>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endforeach; ?>
 
 <div class="panel">
   <form class="filtros" method="GET" id="filtros">

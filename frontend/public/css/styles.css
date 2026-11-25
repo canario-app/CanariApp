@@ -81,6 +81,9 @@ button, input, select { font: inherit; color: inherit; }
 /* ---------- Tarjetas ---------- */
 .card { border: 1px solid var(--gris-borde); border-radius: var(--radio); background: var(--blanco); padding: 25px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-2 .feature p { max-width: none; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
 .feature { display: flex; flex-direction: column; gap: 12px; min-height: 193px; }
 .feature h3 { font-size: 18px; font-weight: 600; }
 .feature p { font-size: 14px; color: var(--gris-texto); line-height: 21px; max-width: 280px; }
@@ -124,6 +127,17 @@ button, input, select { font: inherit; color: inherit; }
 }
 .input::placeholder { color: var(--gris-placeholder); }
 .input:focus { border-color: var(--gris-oscuro); }
+/* Buscador de variedades (js/app.js) */
+.buscador-variedades {
+  position: fixed; z-index: 1000; max-height: 280px; overflow-y: auto;
+  background: var(--blanco); color: var(--negro); border: 1px solid var(--gris-borde);
+  border-radius: var(--radio); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); font-size: 14px;
+}
+.buscador-variedades .opcion { padding: 8px 12px; cursor: pointer; line-height: 1.35; }
+.buscador-variedades .opcion span { color: var(--gris-texto); }
+.buscador-variedades .opcion:hover, .buscador-variedades .opcion.marcada { background: var(--gris-fondo); }
+.buscador-variedades .pie-lista { padding: 8px 12px; color: var(--gris-texto); font-size: 13px; border-top: 1px solid var(--gris-linea); }
+.buscador-variedades .pie-lista a { text-decoration: underline; color: inherit; }
 .input-icono { position: relative; }
 .input-icono img { position: absolute; top: 12px; width: 16px; height: 16px; }
 .input-icono.izq img { left: 12px; }

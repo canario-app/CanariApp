@@ -11,7 +11,7 @@ $secciones = $esAdmin ? [
 ] : [
     'inicio'    => ['Inicio', 'inicio.php'],
     'canarios'  => ['Canarios', 'canarios.php'],
-    'parejas'   => ['Parejas y cruces', 'parejas.php'],
+    'parejas'   => ['Libro de cría', 'parejas.php'],
     'crias'     => ['Crías', 'crias.php'],
     'titulos'   => ['Títulos', 'titulos.php'],
     'simulador' => ['Simulador', 'simulador.php'],

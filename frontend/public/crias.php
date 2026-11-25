@@ -224,7 +224,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
     </div>
     <div class="campo<?= isset($err['variedad']) ? ' error' : '' ?>">
       <label for="variedad">Variedad del nomenclador</label>
-      <input class="input" id="variedad" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Escriba el código, ej.: CC03" value="<?= e($post['variedad'] ?? variedad_txt($c['variedad'])) ?>" <?= $c['variedad'] ? 'disabled' : '' ?>>
+      <input class="input" id="variedad" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Código o nombre, ej.: D.033" value="<?= e($post['variedad'] ?? variedad_txt($c['variedad'])) ?>" <?= $c['variedad'] ? 'disabled' : '' ?>>
       <?= datalist_variedades() ?>
       <?= $msg('variedad') ?: '<span class="ayuda-campo">Escriba el código o el nombre. Si la variedad indica sexo, debe coincidir con el de la cría.</span>' ?>
     </div>
@@ -263,7 +263,7 @@ $msg = fn($campo) => isset($err[$campo]) ? '<span class="msg-error">' . e($err[$
       <div class="radios-sexo"><?php foreach (['Macho' => 'Macho', 'Hembra' => 'Hembra', '' => 'Pendiente'] as $s => $txt): ?><label class="radio"><input type="radio" name="sexo" value="<?= $s ?>" <?= ($post['sexo'] ?? '') === $s ? 'checked' : '' ?>> <?= $txt ?></label><?php endforeach; ?></div>
       <?= $msg('sexo') ?></div>
     <div class="campo<?= isset($err['variedad']) ? ' error' : '' ?>"><label for="variedad_n">Variedad del nomenclador</label>
-      <input class="input" id="variedad_n" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Escriba el código, ej.: CC033" value="<?= e($post['variedad'] ?? '') ?>">
+      <input class="input" id="variedad_n" name="variedad" list="lista-variedades" autocomplete="off" placeholder="Código o nombre, ej.: D.033" value="<?= e($post['variedad'] ?? '') ?>">
       <?= datalist_variedades() ?>
       <?= $msg('variedad') ?></div>
     <div class="acciones-form"><a href="<?= e($qs()) ?>" class="btn">Cancelar</a><button class="btn btn-primario">Agregar cría</button></div>
