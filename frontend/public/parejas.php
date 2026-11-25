@@ -27,6 +27,20 @@ $lista = array_filter($todas, function ($p) use ($tab, $q, $f_temp) {
     if ($f_temp !== '' && substr($p['desde'], 0, 4) !== $f_temp) return false;
     return true;
 });
+// Búsqueda por jaula: todo lo que hubo en ella (parejas de cualquier estado, nidadas y crías)
+$jaula_q = null;
+if ($q !== '') {
+    $num = preg_replace('/\D/', '', $q);
+    if ($num !== '' && (stripos($q, 'jaula') !== false || in_array($num, array_map('strval', array_column($todas, 'jaula')), true))) $jaula_q = $num;
+}
+$en_jaula = [];
+if ($jaula_q !== null) {
+    foreach ($todas as $pid => $p) {
+        if ((string)$p['jaula'] !== $jaula_q) continue;
+        foreach (nidadas_de_pareja($pid) as $nid => $n) $en_jaula[] = [$pid, $p, $nid, $n, crias_de_nidada($nid)];
+    }
+    usort($en_jaula, fn($a, $b) => strcmp($b[3]['nacimiento'], $a[3]['nacimiento']));
+}
 $temporadas = array_unique(array_map(fn($p) => substr($p['desde'], 0, 4), $todas));
 rsort($temporadas);
 
@@ -40,7 +54,7 @@ $tabTxt = ['Todas' => 'Todas', 'Activa' => 'Activas', 'Finalizada' => 'Finalizad
 
 <div class="page-head">
   <div>
-    <p class="eyebrow">Parejas y cruces</p>
+    <p class="eyebrow">Libro de cría</p>
     <h1 class="titulo-l">Mis parejas</h1>
     <p class="bajada">Forme parejas en una jaula, registre cada cruce y finalícelas cuando terminen para liberar la jaula.</p>
   </div>
@@ -77,6 +91,33 @@ $tabTxt = ['Todas' => 'Todas', 'Activa' => 'Activas', 'Finalizada' => 'Finalizad
       </select>
     </div>
   </form>
+
+  <?php if ($jaula_q !== null): $n_crias = array_sum(array_map(fn($x) => count($x[4]), $en_jaula)); ?>
+    <section class="card" style="display:flex;flex-direction:column;gap:12px">
+      <h2 style="font-size:18px;font-weight:600;display:flex;justify-content:space-between">Jaula <?= e($jaula_q) ?>: nidadas y crías <span class="badge"><?= count($en_jaula) ?> nidada<?= count($en_jaula) === 1 ? '' : 's' ?> · <?= $n_crias ?> cría<?= $n_crias === 1 ? '' : 's' ?></span></h2>
+      <?php if (!$en_jaula): ?>
+        <p class="small muted">Aún no hay nidadas registradas en esta jaula.</p>
+      <?php else: ?>
+      <table class="tabla" style="max-width:none">
+        <thead><tr><th>Nacimiento</th><th>Pareja</th><th>Crías</th></tr></thead>
+        <tbody>
+        <?php foreach ($en_jaula as [$pid, $p, $nid, $n, $cs]): $m = canario($p['macho']); $h = canario($p['hembra']); ?>
+          <tr>
+            <td><strong><?= e(fecha($n['nacimiento'])) ?></strong><span class="sub">Cruce del <?= e(fecha($n['cruce'])) ?></span></td>
+            <td><a href="jaula.php?id=<?= $pid ?>"><?= e($m['numero']) ?> ♂ × <?= e($h['numero']) ?> ♀</a><span class="sub">Pareja <?= e(mb_strtolower($p['estado'])) ?></span></td>
+            <td>
+              <?php if (!$cs): ?><span class="muted">Sin crías</span><?php endif; ?>
+              <?php foreach ($cs as $ck => $cr): ?>
+                <a href="canario_ficha.php?id=<?= e(urlencode($ck)) ?>" class="badge" style="margin:0 4px 4px 0"><?= e($cr['numero']) ?><?= $cr['sexo'] ? ($cr['sexo'] === 'Macho' ? ' ♂' : ' ♀') : '' ?></a>
+              <?php endforeach; ?>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
 
   <?php if (!$lista): ?>
     <div class="vacio" style="min-height:300px">

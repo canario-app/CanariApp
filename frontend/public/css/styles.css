@@ -81,6 +81,9 @@ button, input, select { font: inherit; color: inherit; }
 /* ---------- Tarjetas ---------- */
 .card { border: 1px solid var(--gris-borde); border-radius: var(--radio); background: var(--blanco); padding: 25px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-2 .feature p { max-width: none; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
 .feature { display: flex; flex-direction: column; gap: 12px; min-height: 193px; }
 .feature h3 { font-size: 18px; font-weight: 600; }
 .feature p { font-size: 14px; color: var(--gris-texto); line-height: 21px; max-width: 280px; }
